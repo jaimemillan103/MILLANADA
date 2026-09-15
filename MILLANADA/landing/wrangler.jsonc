@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "la-millanada-2026",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "vinext/server/app-router-entry",
+  "vars": {
+    "MILLANADA_SCRIPT_URL": "https://script.google.com/macros/s/AKfycbwJSf_hmiIYSSK11fltTY-6r9HUfUXKtyCsnznaBIY2dgPZN1wlO4ItZ7jw4wflbCLNBg/exec"
+  },
+  "assets": {
+    "not_found_handling": "none"
+  }
+}
