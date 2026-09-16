@@ -1,0 +1,967 @@
+<title>MILLANADA 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340..900;1,9..144,400..600&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF2E2;
+    --surface:#FFFDF8;
+    --surface-2:#F3E4C9;
+    --ink:#2B2016;
+    --ink-soft:#7A6A56;
+    --line:#E6D4AE;
+    --accent:#C1440E;
+    --accent-ink:#FFF7EE;
+    --azulejo:#2C6E8E;
+    --azulejo-soft:#DCEBF0;
+    --leaf:#5B7B3A;
+    --leaf-soft:#E4EDD8;
+    --ink-tag:#4A3A28;
+    --ink-tag-soft:#EFE4CF;
+    --taken:#B7391F;
+    --taken-soft:#F6E1D8;
+    --rose:#A83D63;
+    --rose-soft:#F5DEE7;
+    --shadow:0 12px 28px -16px rgba(60,38,12,0.35);
+    --radius:16px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1B140E;
+      --surface:#241B13;
+      --surface-2:#2E2116;
+      --ink:#F3E8D6;
+      --ink-soft:#C7B396;
+      --line:#3E2E1C;
+      --accent:#E97D4E;
+      --accent-ink:#241205;
+      --azulejo:#7FC1DE;
+      --azulejo-soft:#233B45;
+      --leaf:#9BC172;
+      --leaf-soft:#2B3A22;
+      --ink-tag:#E9D9BB;
+      --ink-tag-soft:#3A2E1D;
+      --taken:#F2836A;
+      --taken-soft:#3E251C;
+      --rose:#E491B0;
+      --rose-soft:#3A2130;
+      --shadow:0 14px 30px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1B140E;
+    --surface:#241B13;
+    --surface-2:#2E2116;
+    --ink:#F3E8D6;
+    --ink-soft:#C7B396;
+    --line:#3E2E1C;
+    --accent:#E97D4E;
+    --accent-ink:#241205;
+    --azulejo:#7FC1DE;
+    --azulejo-soft:#233B45;
+    --leaf:#9BC172;
+    --leaf-soft:#2B3A22;
+    --ink-tag:#E9D9BB;
+    --ink-tag-soft:#3A2E1D;
+    --taken:#F2836A;
+    --taken-soft:#3E251C;
+    --rose:#E491B0;
+    --rose-soft:#3A2130;
+    --shadow:0 14px 30px -14px rgba(0,0,0,0.55);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Archivo",system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);}
+
+  .tilerule{
+    height:10px;
+    background:
+      repeating-linear-gradient(135deg,
+        var(--azulejo) 0 10px,
+        var(--accent) 10px 20px,
+        var(--leaf) 20px 30px,
+        var(--surface-2) 30px 40px);
+    opacity:.85;
+  }
+
+  header.hero{
+    padding:56px 24px 40px;
+    max-width:760px;
+    margin:0 auto;
+    text-align:center;
+  }
+  .eyebrow{
+    font-family:"Archivo",sans-serif;
+    font-weight:700;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:12.5px;
+    color:var(--azulejo);
+  }
+  h1{
+    font-family:"Fraunces",serif;
+    font-optical-sizing:auto;
+    font-weight:620;
+    font-size:clamp(2.3rem,6vw,3.6rem);
+    line-height:1.05;
+    margin:.4em 0 .3em;
+    text-wrap:balance;
+    color:var(--ink);
+  }
+  h1 em{
+    font-style:italic;
+    font-weight:460;
+    color:var(--accent);
+  }
+  .hero p.lede{
+    font-size:1.08rem;
+    color:var(--ink-soft);
+    max-width:56ch;
+    margin:0 auto 22px;
+  }
+  .infobar{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:10px;
+    margin-top:8px;
+  }
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:9px 16px;
+    font-size:.92rem;
+    font-weight:600;
+    box-shadow:var(--shadow);
+  }
+  .chip .ico{font-size:1rem;}
+
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:8px 20px 100px;
+  }
+
+  section.card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:26px 24px;
+    margin-top:22px;
+    box-shadow:var(--shadow);
+  }
+  .step-label{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .step-num{
+    width:26px;height:26px;
+    border-radius:50%;
+    background:var(--accent);
+    color:var(--accent-ink);
+    font-weight:700;
+    font-size:.85rem;
+    display:flex;align-items:center;justify-content:center;
+    flex:none;
+  }
+  .step-title{
+    font-family:"Fraunces",serif;
+    font-weight:600;
+    font-size:1.28rem;
+  }
+  .step-sub{
+    color:var(--ink-soft);
+    font-size:.92rem;
+    margin:2px 0 0 36px;
+  }
+
+  input[type="text"], select{
+    width:100%;
+    font:inherit;
+    padding:11px 13px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+  }
+  input[type="text"]:focus, select:focus{
+    outline:2px solid var(--azulejo);
+    outline-offset:1px;
+  }
+
+  #searchWrap{position:relative;}
+  #results{
+    margin-top:8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    background:var(--surface);
+  }
+  #results:empty{display:none;border:none;}
+  .result-row{
+    width:100%;
+    text-align:left;
+    padding:11px 13px;
+    background:none;
+    border:none;
+    border-bottom:1px solid var(--line);
+    color:var(--ink);
+    font:inherit;
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .result-row:last-child{border-bottom:none;}
+  .result-row:hover, .result-row:focus{background:var(--surface-2);}
+  .result-fam{color:var(--ink-soft);font-size:.86rem;}
+
+  #meBadge{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:var(--leaf-soft);
+    border:1px solid var(--leaf);
+    border-radius:10px;
+    padding:10px 14px;
+    margin-top:10px;
+    font-weight:600;
+  }
+  #meBadge button{
+    background:none;border:none;
+    color:var(--ink-soft);
+    text-decoration:underline;
+    cursor:pointer;
+    font:inherit;
+    font-weight:500;
+  }
+
+  #rsvpBody{display:none;}
+  #rsvpBody.show{display:block;}
+
+  .member-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 4px;
+    border-bottom:1px solid var(--line);
+  }
+  .member-row:last-of-type{border-bottom:none;}
+  .member-row label{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    cursor:pointer;
+  }
+  .member-name{font-weight:600;}
+  .member-age{color:var(--ink-soft);font-size:.82rem;}
+  input[type="checkbox"]{
+    width:20px;height:20px;
+    accent-color:var(--leaf);
+    flex:none;
+  }
+
+  #extraList{margin-top:6px;}
+  .extra-row{
+    display:grid;
+    grid-template-columns:1fr 130px auto;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .extra-row button{
+    background:none;border:1px solid var(--line);border-radius:8px;
+    color:var(--taken);
+    cursor:pointer;
+    font-size:1.1rem;
+    line-height:1;
+  }
+  .add-btn{
+    background:var(--surface-2);
+    border:1px dashed var(--ink-soft);
+    border-radius:10px;
+    padding:9px 14px;
+    font:inherit;
+    font-weight:600;
+    color:var(--ink);
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .add-btn:hover{background:var(--line);}
+
+  .cat-block + .cat-block{margin-top:20px;}
+  .cat-head{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    font-weight:700;
+    font-size:.86rem;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    padding:5px 11px;
+    border-radius:999px;
+    margin-bottom:10px;
+  }
+  .cat-azulejo{background:var(--azulejo-soft);color:var(--azulejo);}
+  .cat-terracota{background:var(--taken-soft);color:var(--accent);}
+  .cat-leaf{background:var(--leaf-soft);color:var(--leaf);}
+  .cat-rose{background:var(--rose-soft);color:var(--rose);}
+  .cat-ink{background:var(--ink-tag-soft);color:var(--ink-tag);}
+
+  .dish-grid{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .dish{
+    position:relative;
+    text-align:left;
+    border-radius:12px;
+    border:1.5px solid var(--line);
+    background:var(--surface);
+    padding:11px 44px 11px 14px;
+    cursor:pointer;
+    font:inherit;
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    width:100%;
+  }
+  .dish .dnum{
+    font-size:.7rem;
+    color:var(--ink-soft);
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  .dish .dname{font-weight:600;font-size:.96rem;line-height:1.3;}
+  .dish .dqty{font-size:.8rem;color:var(--ink-soft);}
+  .dish .dtag{
+    font-size:.78rem;
+    margin-top:2px;
+    color:var(--ink-soft);
+  }
+  .dish.taken{
+    border-color:var(--taken);
+    background:var(--taken-soft);
+  }
+  .dish.taken .dtag{color:var(--taken);font-weight:600;}
+  .dish.selected{
+    border-color:var(--leaf);
+    background:var(--leaf-soft);
+    box-shadow:inset 0 0 0 1.5px var(--leaf);
+  }
+  .dish.selected .dtag{color:var(--leaf);font-weight:600;}
+  .dish.selected::after{
+    content:"✓";
+    position:absolute;
+    top:50%;right:14px;
+    transform:translateY(-50%);
+    font-size:1.1rem;
+    font-weight:700;
+    color:var(--leaf);
+  }
+  .dish.taken.selected{background:var(--leaf-soft);border-color:var(--leaf);}
+
+  .other-row{
+    margin-top:12px;
+    display:flex;
+    gap:8px;
+  }
+  .other-row input{flex:1;}
+
+  textarea{
+    width:100%;
+    font:inherit;
+    padding:11px 13px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    resize:vertical;
+    min-height:64px;
+  }
+
+  #submitBtn{
+    width:100%;
+    margin-top:22px;
+    padding:15px;
+    border:none;
+    border-radius:12px;
+    background:var(--accent);
+    color:var(--accent-ink);
+    font:inherit;
+    font-weight:700;
+    font-size:1.02rem;
+    cursor:pointer;
+  }
+  #submitBtn:disabled{opacity:.55;cursor:default;}
+  #submitBtn:hover:not(:disabled){filter:brightness(1.06);}
+  #submitMsg{
+    margin-top:10px;
+    font-size:.88rem;
+    color:var(--ink-soft);
+    text-align:center;
+  }
+
+  #confirmCard{display:none;text-align:center;}
+  #confirmCard .big{
+    font-family:"Fraunces",serif;
+    font-size:1.6rem;
+    font-weight:600;
+    margin:6px 0 8px;
+  }
+  #confirmSummary{
+    color:var(--ink-soft);
+    font-size:.95rem;
+    line-height:1.6;
+  }
+  #editAgain{
+    margin-top:14px;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:9px 16px;
+    font:inherit;
+    cursor:pointer;
+    color:var(--ink);
+  }
+
+  .live{
+    display:flex;
+    align-items:baseline;
+    justify-content:center;
+    gap:8px;
+    margin-top:26px;
+    font-size:.88rem;
+    color:var(--ink-soft);
+  }
+  .live b{
+    font-family:"Fraunces",serif;
+    font-size:1.5rem;
+    color:var(--accent);
+    font-weight:600;
+  }
+
+  footer{
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:.82rem;
+    padding:30px 20px 50px;
+  }
+
+  @media (max-width:420px){
+    .extra-row{grid-template-columns:1fr 100px auto;}
+  }
+</style>
+
+<div class="tilerule"></div>
+
+<header class="hero">
+  <div class="eyebrow">Reunión familiar · Córdoba</div>
+  <h1>MILLANADA <em>2026</em></h1>
+  <p class="lede">Un domingo entero en el jardín de los abuelos: toda la familia junta, buena mesa y tiempo de sobra. Confirma quién venís y qué traéis — se tarda un minuto.</p>
+  <div class="infobar">
+    <span class="chip"><span class="ico">📅</span> Domingo 11 de octubre de 2026</span>
+    <span class="chip"><span class="ico">🕜</span> Desde las 13:30</span>
+    <span class="chip"><span class="ico">🏡</span> Chalet de los abuelos, Córdoba</span>
+  </div>
+</header>
+
+<main>
+
+  <section class="card">
+    <div class="step-label"><span class="step-num">1</span><span class="step-title">Buscad vuestro nombre</span></div>
+    <div class="step-sub">Escribid quién de vosotros rellena esto — luego confirmáis por toda vuestra rama de la familia.</div>
+
+    <div id="searchWrap" style="margin-top:14px;">
+      <input type="text" id="searchInput" placeholder="Empieza a escribir tu nombre…" autocomplete="off">
+      <div id="results"></div>
+    </div>
+    <div id="meBadge">
+      <span id="meBadgeText"></span>
+      <button id="meChange" type="button">cambiar</button>
+    </div>
+  </section>
+
+  <div id="rsvpBody">
+
+    <section class="card">
+      <div class="step-label"><span class="step-num">2</span><span class="step-title">¿Quién de vuestro grupo viene?</span></div>
+      <div class="step-sub">Están marcados todos por defecto — desmarcad quien no pueda venir, y añadid a quien falte en la lista.</div>
+      <div id="memberList" style="margin-top:14px;"></div>
+      <div id="extraList"></div>
+      <button class="add-btn" id="addExtra" type="button">+ Añadir a alguien más de la familia</button>
+    </section>
+
+    <section class="card">
+      <div class="step-label"><span class="step-num">3</span><span class="step-title">¿Qué plato podéis traer?</span></div>
+      <div class="step-sub">Este es el reparto ya pensado para el menú (~30 personas). Si algo está en rojo es que alguien lo ha apuntado ya — elegid otra cosa si podéis. Podéis marcar más de un plato.</div>
+      <div id="dishArea" style="margin-top:16px;"></div>
+      <div class="other-row">
+        <input type="text" id="otherDish" placeholder="Otro plato que se os ocurra…">
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step-label"><span class="step-num">4</span><span class="step-title">Algo más</span></div>
+      <div class="step-sub">Alergias, si lleváis silla para peques, hora aproximada de llegada… lo que sea útil (opcional).</div>
+      <textarea id="notes" style="margin-top:12px;" placeholder="Escribe aquí si hace falta…"></textarea>
+
+      <button id="submitBtn" type="button">Confirmar asistencia</button>
+      <div id="submitMsg"></div>
+    </section>
+
+    <section class="card" id="confirmCard">
+      <div style="font-size:2rem;">🌸</div>
+      <div class="big">¡Apuntado, gracias!</div>
+      <div id="confirmSummary"></div>
+      <button id="editAgain" type="button">Editar mi respuesta</button>
+    </section>
+
+  </div>
+
+  <div class="live" id="liveCounter"></div>
+
+</main>
+
+<footer>Fecha tope para confirmar: 5 de octubre. Dudas o cambios, habladlo directamente con Teresa.</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Guest list (from la hoja de cálculo de la familia) ----------
+  var GUESTS = [
+    {n:"Margarita", f:"de Valenzuela", e:"Adulto"},
+    {n:"Ita", f:"Millán Zurita", e:"Adulto"},
+    {n:"Cristobal", f:"Millán Zurita", e:"Adulto"},
+    {n:"Conchita", f:"Millán Zurita", e:"Joven adulto"},
+    {n:"Xavi", f:"Millán Zurita", e:"Joven adulto"},
+    {n:"Ignacio", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Baby Xavi", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Gonzalo", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Tomás", f:"Millán Zurita", e:"Joven adulto"},
+    {n:"Mª Paz", f:"Millán Zurita", e:"Joven adulto"},
+    {n:"Tomi", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Jaime", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Pablo", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Clarita", f:"Millán Zurita", e:"Joven adulto"},
+    {n:"Carlos", f:"Millán Zurita", e:"Joven adulto"},
+    {n:"Carlitos", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Santiago", f:"Millán Zurita", e:"Niño/a"},
+    {n:"Loles", f:"Rodríguez Millán", e:"Adulto"},
+    {n:"María", f:"Rodríguez Millán", e:"Joven adulto"},
+    {n:"Adrien", f:"Rodríguez Millán", e:"Joven adulto"},
+    {n:"Emma", f:"Rodríguez Millán", e:"Niño/a"},
+    {n:"Miguel", f:"Rodríguez Millán", e:"Joven adulto"},
+    {n:"Rebeca", f:"Rodríguez Millán", e:"Joven adulto"},
+    {n:"Teresa", f:"Rodríguez Millán", e:"Joven adulto"},
+    {n:"Luife", f:"Rodríguez Millán", e:"Joven adulto"},
+    {n:"Felisa", f:"Luján Millán", e:"Adulto"},
+    {n:"Jaime", f:"Luján Millán", e:"Adulto"},
+    {n:"Fernando", f:"Luján Millán", e:"Joven adulto"},
+    {n:"Silvia", f:"Luján Millán", e:"Joven adulto"},
+    {n:"Enrique", f:"Luján Millán", e:"Joven adulto"},
+    {n:"Joaquín", f:"Millán López", e:"Adulto"},
+    {n:"Quino", f:"Millán López", e:"Joven adulto"},
+    {n:"Quinito", f:"Millán López", e:"Niño/a"},
+    {n:"Amalita", f:"Millán López", e:"Joven adulto"},
+    {n:"Jesús", f:"Millán López", e:"Joven adulto"},
+    {n:"Pepe", f:"Millán López", e:"Joven adulto"},
+    {n:"Paula", f:"Millán López", e:"Joven adulto"},
+    {n:"Tomás", f:"Millán Sánchez", e:"Adulto"},
+    {n:"Mª Luisa", f:"Millán Sánchez", e:"Adulto"},
+    {n:"Tomi", f:"Millán Sánchez", e:"Joven adulto"},
+    {n:"Pilar", f:"Millán Sánchez", e:"Joven adulto"},
+    {n:"Marta", f:"Millán Sánchez", e:"Joven adulto"},
+    {n:"Álvaro", f:"Millán Sánchez", e:"Joven adulto"},
+    {n:"Jaime", f:"Millán Sánchez", e:"Joven adulto"},
+    {n:"Margari", f:"Fdez. de Lascoiti Millán", e:"Adulto"},
+    {n:"Javier", f:"Fdez. de Lascoiti Millán", e:"Adulto"},
+    {n:"Gonzalo", f:"Fdez. de Lascoiti Millán", e:"Joven adulto"},
+    {n:"Carmen", f:"Fdez. de Lascoiti Millán", e:"Joven adulto"},
+    {n:"Gabrielito", f:"Fdez. de Lascoiti Millán", e:"Niño/a"},
+    {n:"Alejandra", f:"Fdez. de Lascoiti Millán", e:"Niño/a"},
+    {n:"Olivia", f:"Fdez. de Lascoiti Millán", e:"Niño/a"},
+    {n:"Perico", f:"Fdez. de Lascoiti Millán", e:"Joven adulto"},
+    {n:"Ana", f:"Fdez. de Lascoiti Millán", e:"Joven adulto"},
+    {n:"Juande", f:"Jimena Millán", e:"Adulto"},
+    {n:"Teresa", f:"Jimena Millán", e:"Adulto"},
+    {n:"Juande hijo", f:"Jimena Millán", e:"Joven adulto"},
+    {n:"Ana", f:"Jimena Millán", e:"Joven adulto"},
+    {n:"Patricia", f:"Jimena Millán", e:"Niño/a"},
+    {n:"Álvaro", f:"Jimena Millán", e:"Joven adulto"},
+    {n:"Helene", f:"Jimena Millán", e:"Joven adulto"},
+    {n:"Flora", f:"Jimena Millán", e:"Niño/a"},
+    {n:"Mario", f:"Jimena Millán", e:"Niño/a"},
+    {n:"Félix", f:"Jimena Millán", e:"Niño/a"}
+  ].map(function(g,i){ g.id = String(i); return g; });
+
+  var DISHES = [
+    {cat:"Fríos", cls:"cat-azulejo", items:[
+      {num:1, name:"Salmorejo cordobés", qty:"1 jarra grande + huevo/jamón aparte"},
+      {num:2, name:"Ensaladilla rusa", qty:"Bandeja grande (~15 raciones)"},
+      {num:3, name:"Pipirrana con atún", qty:"Ensaladera grande"},
+      {num:4, name:"Papas aliñás con caballa", qty:"Bandeja grande"},
+      {num:5, name:"Tabla de embutidos, quesos y picos", qty:"1 tabla grande"}
+    ]},
+    {cat:"Calientes ligeros", cls:"cat-leaf", items:[
+      {num:6, name:"Tortilla de patatas grande #1", qty:"Tortilla XL (10-12 raciones)"},
+      {num:7, name:"Tortilla de patatas grande #2", qty:"Tortilla XL (10-12 raciones)"},
+      {num:8, name:"Empanada de atún", qty:"Bandeja entera"},
+      {num:9, name:"Quiche (verduras o bacon)", qty:"1 quiche grande"},
+      {num:10, name:"Berenjenas fritas con miel de caña", qty:"Bandeja grande"}
+    ]},
+    {cat:"Fuertes", cls:"cat-terracota", items:[
+      {num:11, name:"Flamenquines en tacos", qty:"~20 unidades"},
+      {num:12, name:"Alitas de pollo al horno", qty:"Bandeja XL (~3 kg)"},
+      {num:13, name:"Croquetas caseras (jamón o puchero)", qty:"~60 unidades"},
+      {num:14, name:"Pinchos morunos para plancha", qty:"~30 pinchos"}
+    ]},
+    {cat:"Postre", cls:"cat-rose", items:[
+      {num:15, name:"Pastel cordobés + fruta cortada", qty:"1 pastel + fuente fruta"},
+      {num:16, name:"Tarta de queso al horno (bonus)", qty:"1 tarta grande"}
+    ]},
+    {cat:"Bebidas y extras", cls:"cat-ink", items:[
+      {num:17, name:"Agua", qty:"12-15 botellas 1,5 L"},
+      {num:18, name:"Refrescos", qty:"8-10 botellas 2 L (mezcla)"},
+      {num:19, name:"Cerveza", qty:"1 pack grande + 1 mediano"},
+      {num:20, name:"Vino tinto / blanco", qty:"3 tintos + 2 blancos"},
+      {num:21, name:"Tinto de verano preparado", qty:"2-3 garrafas"},
+      {num:22, name:"Pan", qty:"6-8 barras"},
+      {num:23, name:"Hielo", qty:"4-5 bolsas grandes"},
+      {num:24, name:"Café + leche + azúcar + vasos", qty:"Kit completo"},
+      {num:25, name:"Comida para bebés", qty:"Papillas + fruta blanda"},
+      {num:26, name:"Chuches para la piñata", qty:"1-2 kg surtido"}
+    ]}
+  ];
+
+  function stripAccents(s){
+    return s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  }
+
+  // ---------- state ----------
+  var me = null;
+  var branch = [];
+  var attendance = {};
+  var extras = [];       // {name, age}
+  var extraSeq = 0;
+  var selectedDishes = new Set();
+  var db = null;
+  var dishCounts = {};   // dish name -> [{name, familia}]
+  var totalAttending = 0;
+
+  // ---------- DOM refs ----------
+  var searchInput = document.getElementById("searchInput");
+  var results = document.getElementById("results");
+  var meBadge = document.getElementById("meBadge");
+  var meBadgeText = document.getElementById("meBadgeText");
+  var meChange = document.getElementById("meChange");
+  var rsvpBody = document.getElementById("rsvpBody");
+  var memberList = document.getElementById("memberList");
+  var extraList = document.getElementById("extraList");
+  var addExtraBtn = document.getElementById("addExtra");
+  var dishArea = document.getElementById("dishArea");
+  var otherDishInput = document.getElementById("otherDish");
+  var notesInput = document.getElementById("notes");
+  var submitBtn = document.getElementById("submitBtn");
+  var submitMsg = document.getElementById("submitMsg");
+  var confirmCard = document.getElementById("confirmCard");
+  var confirmSummary = document.getElementById("confirmSummary");
+  var editAgainBtn = document.getElementById("editAgain");
+  var liveCounter = document.getElementById("liveCounter");
+
+  // ---------- search ----------
+  searchInput.addEventListener("input", function(){
+    var q = stripAccents(searchInput.value.trim());
+    results.innerHTML = "";
+    if(q.length < 2) return;
+    var matches = GUESTS.filter(function(g){ return stripAccents(g.n).indexOf(q) !== -1; }).slice(0,8);
+    matches.forEach(function(g){
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "result-row";
+      row.innerHTML = '<span>'+g.n+'</span><span class="result-fam">'+g.f+'</span>';
+      row.addEventListener("click", function(){ selectMe(g); });
+      results.appendChild(row);
+    });
+  });
+
+  meChange.addEventListener("click", function(){
+    me = null;
+    meBadge.style.display = "none";
+    rsvpBody.classList.remove("show");
+    confirmCard.style.display = "none";
+    searchInput.value = "";
+    searchInput.style.display = "";
+    searchInput.focus();
+  });
+
+  function selectMe(g){
+    me = g;
+    branch = GUESTS.filter(function(x){ return x.f === g.f; });
+    searchInput.value = "";
+    searchInput.style.display = "none";
+    results.innerHTML = "";
+    meBadge.style.display = "flex";
+    meBadgeText.textContent = "Rellenando como " + g.n + " · " + g.f;
+    rsvpBody.classList.add("show");
+    confirmCard.style.display = "none";
+
+    attendance = {};
+    branch.forEach(function(m){ attendance[m.id] = true; });
+    extras = [];
+    extraSeq = 0;
+    selectedDishes = new Set();
+    otherDishInput.value = "";
+    notesInput.value = "";
+
+    renderMembers();
+    renderDishes();
+    tryPrefillFromSaved();
+  }
+
+  function renderMembers(){
+    memberList.innerHTML = "";
+    branch.forEach(function(m){
+      var row = document.createElement("div");
+      row.className = "member-row";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!attendance[m.id];
+      cb.addEventListener("change", function(){ attendance[m.id] = cb.checked; });
+      var label = document.createElement("label");
+      label.innerHTML = '<span class="member-name">'+m.n+'</span><span class="member-age">'+m.e+'</span>';
+      label.prepend(cb);
+      row.appendChild(label);
+      memberList.appendChild(row);
+    });
+    renderExtras();
+  }
+
+  function renderExtras(){
+    extraList.innerHTML = "";
+    extras.forEach(function(ex){
+      var row = document.createElement("div");
+      row.className = "extra-row";
+      var nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.placeholder = "Nombre";
+      nameInput.value = ex.name;
+      nameInput.addEventListener("input", function(){ ex.name = nameInput.value; });
+      var ageSelect = document.createElement("select");
+      ["Adulto","Joven adulto","Niño/a"].forEach(function(opt){
+        var o = document.createElement("option");
+        o.value = opt; o.textContent = opt;
+        if(ex.age === opt) o.selected = true;
+        ageSelect.appendChild(o);
+      });
+      ageSelect.value = ex.age;
+      ageSelect.addEventListener("change", function(){ ex.age = ageSelect.value; });
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.textContent = "✕";
+      rm.addEventListener("click", function(){
+        extras = extras.filter(function(e){ return e.id !== ex.id; });
+        renderExtras();
+      });
+      row.appendChild(nameInput);
+      row.appendChild(ageSelect);
+      row.appendChild(rm);
+      extraList.appendChild(row);
+    });
+  }
+
+  addExtraBtn.addEventListener("click", function(){
+    extras.push({id: "x"+(extraSeq++), name:"", age:"Adulto"});
+    renderExtras();
+  });
+
+  // ---------- dishes ----------
+  function renderDishes(){
+    dishArea.innerHTML = "";
+    DISHES.forEach(function(group){
+      var block = document.createElement("div");
+      block.className = "cat-block";
+      var head = document.createElement("div");
+      head.className = "cat-head " + group.cls;
+      head.textContent = group.cat;
+      block.appendChild(head);
+      var grid = document.createElement("div");
+      grid.className = "dish-grid";
+      group.items.forEach(function(item){
+        grid.appendChild(dishTile(item));
+      });
+      block.appendChild(grid);
+      dishArea.appendChild(block);
+    });
+  }
+
+  function dishTile(item){
+    var name = item.name;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "dish";
+    updateTileClasses(btn, name);
+    btn.innerHTML =
+      '<span class="dnum">Nº '+item.num+'</span>'+
+      '<span class="dname">'+name+'</span>'+
+      '<span class="dqty">'+item.qty+'</span>'+
+      '<span class="dtag">'+tagText(name)+'</span>';
+    btn.addEventListener("click", function(){
+      if(selectedDishes.has(name)) selectedDishes.delete(name);
+      else selectedDishes.add(name);
+      renderDishes();
+    });
+    return btn;
+  }
+
+  function tagText(name){
+    if(selectedDishes.has(name)) return "vosotros lo traéis";
+    var all = dishCounts[name] || [];
+    if(all.length === 0) return "libre";
+    var names = all.slice(0,2).map(function(c){ return c.name; }).join(", ");
+    return "ya lo trae " + names + (all.length > 2 ? " y otros" : "");
+  }
+
+  function updateTileClasses(btn, name){
+    btn.classList.toggle("selected", selectedDishes.has(name));
+    btn.classList.toggle("taken", !selectedDishes.has(name) && (dishCounts[name]||[]).length > 0);
+  }
+
+  // ---------- live counter ----------
+  function renderLive(){
+    if(totalAttending > 0){
+      liveCounter.innerHTML = "<b>"+totalAttending+"</b> personas confirmadas hasta ahora";
+    } else {
+      liveCounter.innerHTML = "";
+    }
+  }
+
+  // ---------- capability wiring ----------
+  function initDb(){
+    if(!window.claude || !window.claude.use) return;
+    window.claude.use("db").then(function(d){
+      if(!d) return;
+      db = d;
+      db.collection("rsvps").onSnapshot(function(snap){
+        var counts = {};
+        var total = 0;
+        snap.docs.forEach(function(doc){
+          var data = doc.data();
+          if(!data) return;
+          (data.attendees || []).forEach(function(a){
+            if(a.attending){
+              total++;
+              (a.dishes || []).forEach(function(dn){
+                counts[dn] = counts[dn] || [];
+                counts[dn].push({name:a.name, familia:data.familia});
+              });
+            }
+          });
+        });
+        dishCounts = counts;
+        totalAttending = total;
+        if(me) renderDishes();
+        renderLive();
+      }, function(){ /* ignore db errors, form still usable */ });
+    }).catch(function(){});
+  }
+
+  function tryPrefillFromSaved(){
+    if(!db || !me) return;
+    db.doc("rsvps/" + me.id).get().then(function(snap){
+      if(!snap.exists) return;
+      var data = snap.data();
+      if(!data) return;
+      (data.attendees || []).forEach(function(a){
+        if(branch.some(function(m){ return m.id === a.id; })){
+          attendance[a.id] = !!a.attending;
+        } else if(a.extra){
+          extras.push({id:"x"+(extraSeq++), name:a.name, age:a.age||"Adulto"});
+        }
+      });
+      selectedDishes = new Set(data.dishSelection || []);
+      if(data.otherDish) otherDishInput.value = data.otherDish;
+      if(data.notes) notesInput.value = data.notes;
+      renderMembers();
+      renderDishes();
+    }).catch(function(){});
+  }
+
+  // ---------- submit ----------
+  submitBtn.addEventListener("click", function(){
+    if(!me){ return; }
+    submitBtn.disabled = true;
+    submitMsg.textContent = "Guardando…";
+
+    var attendees = branch.map(function(m){
+      return {id:m.id, name:m.n, age:m.e, attending: !!attendance[m.id], extra:false, dishes:[]};
+    }).concat(extras.filter(function(ex){ return ex.name.trim(); }).map(function(ex){
+      return {id:ex.id, name:ex.name.trim(), age:ex.age, attending:true, extra:true, dishes:[]};
+    }));
+
+    var dishList = Array.from(selectedDishes);
+    if(otherDishInput.value.trim()) dishList.push(otherDishInput.value.trim());
+
+    // attribute the dishes to the submitter (or first attendee) for display purposes
+    var carrier = attendees.find(function(a){ return a.id === me.id; }) || attendees.find(function(a){ return a.attending; });
+    if(carrier) carrier.dishes = dishList;
+
+    var payload = {
+      searcherId: me.id,
+      searcherName: me.n,
+      familia: me.f,
+      attendees: attendees,
+      dishSelection: dishList,
+      otherDish: otherDishInput.value.trim(),
+      notes: notesInput.value.trim(),
+      updatedAt: new Date().toISOString()
+    };
+
+    function finish(){
+      submitBtn.disabled = false;
+      rsvpBody.querySelectorAll("section.card:not(#confirmCard)").forEach(function(s){ s.style.display = "none"; });
+      confirmCard.style.display = "block";
+      var going = attendees.filter(function(a){ return a.attending; }).map(function(a){ return a.n || a.name; });
+      var namesTxt = attendees.filter(function(a){return a.attending;}).map(function(a){return a.name;}).join(", ") || "nadie por ahora";
+      var dishTxt = dishList.length ? dishList.join(", ") : "nada apuntado todavía";
+      confirmSummary.textContent = "Vienen: " + namesTxt + ". Traéis: " + dishTxt + ".";
+      submitMsg.textContent = "";
+    }
+
+    if(db){
+      db.doc("rsvps/" + me.id).set(payload).then(finish).catch(function(){
+        submitMsg.textContent = "No se ha podido guardar, prueba otra vez en unos segundos.";
+        submitBtn.disabled = false;
+      });
+    } else {
+      // db capability not available in this view — still let them see the summary
+      finish();
+      submitMsg.textContent = "No se ha podido conectar para guardar tu respuesta — inténtalo desde el enlace original.";
+    }
+  });
+
+  editAgainBtn.addEventListener("click", function(){
+    rsvpBody.querySelectorAll("section.card").forEach(function(s){ s.style.display = ""; });
+    confirmCard.style.display = "none";
+  });
+
+  initDb();
+})();
+</script>
