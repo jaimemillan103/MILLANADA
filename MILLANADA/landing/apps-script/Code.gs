@@ -1,39 +1,64 @@
-const SPREADSHEET_ID = '1j23whY1O54C4oW9iJkOjsO_avOp7cDSBolV09--4Znw';
-const SHEET_NAME = 'Confirmaciones Web';
-const MENU_SHEET_NAME = 'Reparto Menu';
+/**
+ * LA MILLANADA 2026 — backend v9
+ * Fuente única: Google Sheet "organización"
+ *   - ASISTENCIA: tabla maestra, una fila fija por persona
+ *   - ENVIOS: histórico append-only de cada confirmación
+ *   - PLATOS: histórico append-only de reclamaciones de platos
+ *   - KAHOOT: preguntas anónimas append-only
+ */
+
+const SPREADSHEET_ID = '14bvnt5EWz-njcRNp_CxzoMqzOZfuhik2pf9YJ5ujbms';
+const ATTENDANCE_SHEET_NAME = 'ASISTENCIA';
+const SUBMISSIONS_SHEET_NAME = 'ENVIOS';
+const DISHES_SHEET_NAME = 'PLATOS';
+const KAHOOT_SHEET_NAME = 'KAHOOT';
+const TIME_ZONE = 'Europe/Madrid';
 const RSVP_CLOSE_AT = new Date('2026-10-06T00:00:00+02:00').getTime();
 
-// Se añaden al final si la pestaña ya contiene columnas del formulario antiguo.
-// No se borra ni se sobreescribe ninguna columna previa.
-const REQUIRED_HEADERS = [
-  'submitted_at',
-  'searcher_id',
-  'searcher_name',
-  'familia',
-  'attendees_json',
-  'dish_selection_json',
-  'other_dish',
-  'notes',
-  'kahoot_question',
-  'updated_at',
+const DISH_NAMES = [
+  'Salmorejo cordobés',
+  'Ensaladilla rusa',
+  'Ensalada de tomate con atún',
+  'Nachos con guacamole',
+  'Tabla de embutidos, quesos y picos',
+  'Tortilla de patatas grande #1',
+  'Tortilla de patatas grande #2',
+  'Empanadas',
+  'Quiche (verduras o bacon)',
+  'Pan preñao de queso',
+  'Flamenquines en tacos',
+  'Alitas de pollo en la barbacoa',
+  'Croquetas caseras (jamón o puchero)',
+  'Pinchos morunos para plancha',
+  'Pastel cordobés + fruta cortada',
+  'Tarta de queso al horno (bonus)',
+  'Agua',
+  'Coca-Cola',
+  'Fanta',
+  'Nuestra',
+  'Aquarius',
+  'Cervezas',
+  'Vino tinto / blanco',
+  'Tinto de verano preparado',
+  'Pan',
+  'Bolsas de hielo',
+  'Café + leche + azúcar',
+  'Comida para bebés',
+  'Chuches para la piñata',
+  'Platos',
+  'Vasos',
+  'Cubiertos',
+  'Servilletas',
+  'Bolsas de basura grandes',
+  'Fuentes',
+  'Cuencos',
 ];
 
 function doGet(event) {
   try {
-    const action = clean_(event && event.parameter ? event.parameter.action : '') || 'state';
-    const sheet = getSheet_();
-
-    if (action === 'state') {
-      return json_({ ok: true, state: buildState_(sheet) });
-    }
-
-    if (action === 'rsvp') {
-      const searcherId = clean_(event && event.parameter ? event.parameter.searcherId : '');
-      if (!searcherId) throw new Error('Falta searcherId.');
-      return json_({ ok: true, rsvp: getSubmission_(sheet, searcherId) });
-    }
-
-    throw new Error('Acción no válida.');
+    const action = normalizeKey_(event && event.parameter ? event.parameter.action : '') || 'state';
+    if (action !== 'state') throw new Error('Acción no válida.');
+    return json_({ ok: true, state: buildState_() });
   } catch (error) {
     return json_({ ok: false, error: errorMessage_(error) });
   }
@@ -43,384 +68,400 @@ function doPost(event) {
   const lock = LockService.getScriptLock();
   try {
     const body = JSON.parse(event && event.postData && event.postData.contents ? event.postData.contents : '{}');
-    const action = clean_(body.action) || 'submit';
-    if (action !== 'submit') throw new Error('Acción no válida.');
-    if (isClosed_()) throw new Error('Confirmaciones cerradas — habla con Teresa.');
+    const action = normalizeKey_(body.action || 'rsvp');
+    const payload = body.payload || body;
 
-    lock.waitLock(10000);
-    const sheet = getSheet_();
-    const saved = saveSubmission_(sheet, body.payload || body);
-    syncMenuAssignments_(sheet.getParent());
-    return json_({ ok: true, rsvp: saved, state: buildState_(sheet) });
+    lock.waitLock(12000);
+
+    if (action === 'kahoot') {
+      saveKahoot_(payload);
+      return json_({ ok: true });
+    }
+
+    if (action === 'rsvp' || action === 'submit' || action === 'submitrsvp') {
+      if (isClosed_()) throw new Error('Confirmaciones cerradas — habla con Teresa.');
+      saveRsvp_(payload);
+      return json_({ ok: true, state: buildState_() });
+    }
+
+    throw new Error('Acción no válida.');
   } catch (error) {
     return json_({ ok: false, error: errorMessage_(error) });
   } finally {
-    try {
-      if (lock.hasLock()) lock.releaseLock();
-    } catch (ignore) {}
+    try { lock.releaseLock(); } catch (_) {}
   }
 }
 
+/** Ejecutar una vez después de pegar esta versión. */
 function setup() {
-  const sheet = getSheet_();
-  sheet.setFrozenRows(1);
-  syncMenuAssignments_(sheet.getParent());
-  return 'OK: ' + SHEET_NAME + ' preparada y ' + MENU_SHEET_NAME + ' sincronizado.';
+  const spreadsheet = getSpreadsheet_();
+  spreadsheet.setSpreadsheetTimeZone(TIME_ZONE);
+
+  const attendance = requireSheet_(spreadsheet, ATTENDANCE_SHEET_NAME);
+  const submissions = requireSheet_(spreadsheet, SUBMISSIONS_SHEET_NAME);
+  const dishes = requireSheet_(spreadsheet, DISHES_SHEET_NAME);
+  const kahoot = requireSheet_(spreadsheet, KAHOOT_SHEET_NAME);
+
+  attendance.setFrozenRows(1);
+  submissions.setFrozenRows(1);
+  dishes.setFrozenRows(1);
+  kahoot.setFrozenRows(1);
+
+  submissions.getRange(1, 1, 1, 4).setValues([['FECHA', 'NOMBRE DE QUIEN RELLENA', 'FAMILIA', 'ALGO MÁS (alergias, sillas, hora de llegada...)']]);
+  dishes.getRange(1, 1, 1, 3).setValues([['PLATO', 'QUIÉN LO TRAE', 'FECHA']]);
+  ensureKahootSchema_(kahoot);
+
+  // Valida que la tabla maestra tenga sus cuatro columnas esenciales.
+  getAttendanceColumns_(attendance);
+
+  return 'OK: organización preparada. ASISTENCIA + ENVIOS + PLATOS + KAHOOT listas para la landing v9.';
 }
 
-function getSheet_() {
-  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = spreadsheet.getSheetByName(SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(SHEET_NAME);
-  ensureHeaders_(sheet);
-  return sheet;
-}
-
-function ensureHeaders_(sheet) {
-  const lastColumn = sheet.getLastColumn();
-  const lastRow = sheet.getLastRow();
-
-  if (lastColumn === 0 || lastRow === 0) {
-    sheet.getRange(1, 1, 1, REQUIRED_HEADERS.length).setValues([REQUIRED_HEADERS]);
-    sheet.setFrozenRows(1);
-    return;
-  }
-
-  const current = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(clean_);
-  const missing = REQUIRED_HEADERS.filter(function(header) {
-    return current.indexOf(header) === -1;
-  });
-
-  if (missing.length) {
-    sheet.getRange(1, lastColumn + 1, 1, missing.length).setValues([missing]);
-  }
-  sheet.setFrozenRows(1);
-}
-
-function getHeaderMap_(sheet) {
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(clean_);
-  const map = {};
-  headers.forEach(function(header, index) {
-    if (header) map[header] = index;
-  });
-  REQUIRED_HEADERS.forEach(function(header) {
-    if (map[header] === undefined) throw new Error('Falta la columna ' + header + '. Ejecuta setup().');
-  });
-  return map;
-}
-
-function saveSubmission_(sheet, rawPayload) {
-  const payload = normalizePayload_(rawPayload);
-  const map = getHeaderMap_(sheet);
-  const lastColumn = sheet.getLastColumn();
-  const rows = getRsvpRows_(sheet);
-  const existing = rows.find(function(item) { return item.rsvp.searcherId === payload.searcherId; });
-  const rowNumber = existing ? existing.rowNumber : sheet.getLastRow() + 1;
-  const rowValues = existing
-    ? sheet.getRange(rowNumber, 1, 1, lastColumn).getValues()[0]
-    : new Array(lastColumn).fill('');
-
-  const now = new Date().toISOString();
-  const previousSubmittedAt = clean_(rowValues[map.submitted_at]);
-
-  rowValues[map.submitted_at] = previousSubmittedAt || now;
-  rowValues[map.searcher_id] = payload.searcherId;
-  rowValues[map.searcher_name] = payload.searcherName;
-  rowValues[map.familia] = payload.familia;
-  rowValues[map.attendees_json] = JSON.stringify(payload.attendees);
-  rowValues[map.dish_selection_json] = JSON.stringify(payload.dishSelection);
-  rowValues[map.other_dish] = payload.otherDish;
-  rowValues[map.notes] = payload.notes;
-  rowValues[map.kahoot_question] = payload.kahootQuestion;
-  rowValues[map.updated_at] = now;
-
-  sheet.getRange(rowNumber, 1, 1, lastColumn).setValues([rowValues]);
-
-  payload.updatedAt = now;
-  return payload;
-}
-
-
-/**
- * Reconstruye las columnas de reparto (E:G) a partir de todos los RSVP guardados.
- * Así un segundo envío sustituye de verdad al anterior y no deja platos "fantasma".
- * Los platos libres escritos en "Otro plato" se añaden al final como OTRO PROPUESTO.
- */
-function syncMenuAssignments_(spreadsheet) {
-  const rsvpSheet = spreadsheet.getSheetByName(SHEET_NAME);
-  const menuSheet = spreadsheet.getSheetByName(MENU_SHEET_NAME);
-  if (!rsvpSheet) throw new Error('No existe la pestaña ' + SHEET_NAME + '.');
-  if (!menuSheet) throw new Error('No existe la pestaña ' + MENU_SHEET_NAME + '.');
-
-  const rsvpRows = getRsvpRows_(rsvpSheet);
-  const assignments = {};
-
-  rsvpRows.forEach(function(item) {
-    const rsvp = item.rsvp;
-    const selected = (rsvp.dishSelection || []).slice();
-    if (rsvp.otherDish && selected.indexOf(rsvp.otherDish) === -1) selected.push(rsvp.otherDish);
-
-    selected.forEach(function(rawDish) {
-      const dishName = canonicalDishName_(rawDish);
-      const key = dishKey_(dishName);
-      if (!key) return;
-      if (!assignments[key]) assignments[key] = { dishName: dishName, carriers: [] };
-
-      const duplicate = assignments[key].carriers.some(function(carrier) {
-        return carrier.searcherId === rsvp.searcherId;
-      });
-      if (!duplicate) {
-        assignments[key].carriers.push({
-          searcherId: rsvp.searcherId,
-          name: rsvp.searcherName,
-          familia: rsvp.familia,
-        });
-      }
-    });
-  });
-
-  let lastRow = Math.max(menuSheet.getLastRow(), 2);
-  let values = menuSheet.getRange(1, 1, lastRow, 7).getValues();
-  const menuRowsByKey = {};
-  const assignmentRows = [];
-
-  for (let i = 1; i < values.length; i += 1) {
-    const rowNumber = i + 1;
-    const numberValue = values[i][0];
-    const category = clean_(values[i][1]);
-    const dishName = clean_(values[i][2]);
-    const isNumberedItem = typeof numberValue === 'number' && dishName;
-    const isOtherProposal = category === 'OTRO PROPUESTO' && dishName;
-    if (!isNumberedItem && !isOtherProposal) continue;
-
-    const key = dishKey_(canonicalDishName_(dishName));
-    if (key && menuRowsByKey[key] === undefined) menuRowsByKey[key] = rowNumber;
-    assignmentRows.push(rowNumber);
-  }
-
-  // Añade las propuestas libres que todavía no formen parte del menú oficial.
-  Object.keys(assignments).forEach(function(key) {
-    if (menuRowsByKey[key] !== undefined) return;
-    const assignment = assignments[key];
-    menuSheet.appendRow(['', 'OTRO PROPUESTO', assignment.dishName, 'Por concretar', '', '', '']);
-    const rowNumber = menuSheet.getLastRow();
-    menuRowsByKey[key] = rowNumber;
-    assignmentRows.push(rowNumber);
-  });
-
-  // Limpia solo las columnas que gestiona la web; el menú y sus cantidades no se tocan.
-  if (assignmentRows.length) {
-    const a1Ranges = assignmentRows.map(function(rowNumber) { return 'E' + rowNumber + ':G' + rowNumber; });
-    menuSheet.getRangeList(a1Ranges).clearContent();
-  }
-
-  Object.keys(assignments).forEach(function(key) {
-    const rowNumber = menuRowsByKey[key];
-    if (!rowNumber) return;
-    const carriers = assignments[key].carriers;
-    if (!carriers.length) return;
-
-    const families = unique_(carriers.map(function(carrier) { return carrier.familia; })).join(' · ');
-    const people = carriers.map(function(carrier) {
-      return carrier.name + (carrier.familia ? ' (' + carrier.familia + ')' : '');
-    }).join(', ');
-
-    menuSheet.getRange(rowNumber, 5, 1, 3).setValues([[families, '✅', 'Lo trae: ' + people]]);
-  });
-}
-
-function canonicalDishName_(dishName) {
-  const cleanName = clean_(dishName);
-  const key = dishKey_(cleanName);
-  if (key === 'berenjenas fritas con miel de cana') return '';
-  const aliases = {
-    'pipirrana con atun': 'Ensalada de tomate con atún',
-    'papas alinas con caballa': 'Nachos con guacamole',
-    'empanada de atun': 'Empanadas',
-    'alitas de pollo al horno': 'Alitas de pollo en la barbacoa',
-    'hielo': 'Bolsas de hielo',
-    'cerveza': 'Cervezas',
-    'cafe + leche + azucar + vasos': 'Café + leche + azúcar',
-  };
-  return aliases[key] || cleanName;
-}
-
-function dishKey_(value) {
-  return clean_(value)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ñ/g, 'n');
-}
-
-function unique_(values) {
-  const seen = {};
-  return values.filter(function(value) {
-    const key = clean_(value);
-    if (!key || seen[key]) return false;
-    seen[key] = true;
-    return true;
-  });
-}
-
-function normalizePayload_(rawPayload) {
-  const payload = rawPayload || {};
-  const searcherId = clean_(payload.searcherId);
-  const searcherName = clean_(payload.searcherName);
-  const familia = clean_(payload.familia);
-
-  if (!searcherId) throw new Error('Falta searcherId.');
-  if (!searcherName) throw new Error('Falta searcherName.');
-  if (!familia) throw new Error('Falta familia.');
-
-  const attendees = Array.isArray(payload.attendees)
-    ? payload.attendees.slice(0, 40).map(function(attendee) {
-        return {
-          id: clean_(attendee && attendee.id),
-          name: clean_(attendee && attendee.name),
-          age: clean_(attendee && attendee.age),
-          attending: Boolean(attendee && attendee.attending),
-          extra: Boolean(attendee && attendee.extra),
-          dishes: cleanStringArray_(attendee && attendee.dishes, 40),
-        };
-      }).filter(function(attendee) { return attendee.name; })
-    : [];
-
-  if (!attendees.length) throw new Error('Falta la lista de asistentes.');
+function buildState_() {
+  const spreadsheet = getSpreadsheet_();
+  const attendanceSheet = requireSheet_(spreadsheet, ATTENDANCE_SHEET_NAME);
+  const dishesSheet = requireSheet_(spreadsheet, DISHES_SHEET_NAME);
+  const people = readPeople_(attendanceSheet);
+  const dishClaims = buildActiveDishClaims_(dishesSheet, people);
 
   return {
-    searcherId: searcherId,
-    searcherName: searcherName,
-    familia: familia,
-    attendees: attendees,
-    dishSelection: cleanStringArray_(payload.dishSelection, 40),
-    otherDish: limit_(payload.otherDish, 500),
-    notes: limit_(payload.notes, 5000),
-    kahootQuestion: limit_(payload.kahootQuestion, 5000),
+    people: people.map(function(person) {
+      return {
+        id: person.id,
+        name: person.name,
+        familia: person.familia,
+        age: person.age,
+        confirmed: person.confirmed,
+      };
+    }),
+    totalAttending: people.filter(function(person) { return person.confirmed; }).length,
+    dishClaims: dishClaims,
     updatedAt: new Date().toISOString(),
-  };
-}
-
-function getSubmission_(sheet, searcherId) {
-  const rows = getRsvpRows_(sheet);
-  const match = rows.find(function(item) { return item.rsvp.searcherId === clean_(searcherId); });
-  return match ? match.rsvp : null;
-}
-
-function buildState_(sheet) {
-  const rows = getRsvpRows_(sheet);
-  const dishCounts = {};
-  let totalAttending = 0;
-  let updatedAt = null;
-
-  rows.forEach(function(item) {
-    const rsvp = item.rsvp;
-    const attending = rsvp.attendees.filter(function(attendee) { return attendee.attending; });
-    totalAttending += attending.length;
-
-    let dishesAttributed = false;
-    attending.forEach(function(attendee) {
-      (attendee.dishes || []).forEach(function(dishName) {
-        dishesAttributed = true;
-        addDishCarrier_(dishCounts, dishName, attendee.name, rsvp.familia, rsvp.searcherId);
-      });
-    });
-
-    // Compatibilidad defensiva: si hay selección pero ningún attendee tiene dishes,
-    // atribuimos los platos al responsable del RSVP.
-    if (!dishesAttributed) {
-      (rsvp.dishSelection || []).forEach(function(dishName) {
-        addDishCarrier_(dishCounts, dishName, rsvp.searcherName, rsvp.familia, rsvp.searcherId);
-      });
-    }
-
-    if (rsvp.updatedAt && (!updatedAt || rsvp.updatedAt > updatedAt)) updatedAt = rsvp.updatedAt;
-  });
-
-  return {
-    totalAttending: totalAttending,
-    dishCounts: dishCounts,
-    updatedAt: updatedAt,
     closed: isClosed_(),
   };
 }
 
-function addDishCarrier_(dishCounts, dishName, name, familia, searcherId) {
-  const cleanDish = clean_(dishName);
-  if (!cleanDish) return;
-  if (!dishCounts[cleanDish]) dishCounts[cleanDish] = [];
-  dishCounts[cleanDish].push({ name: clean_(name), familia: clean_(familia), searcherId: clean_(searcherId) });
-}
+function saveRsvp_(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('Faltan datos de la confirmación.');
 
-function getRsvpRows_(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
+  const spreadsheet = getSpreadsheet_();
+  const attendanceSheet = requireSheet_(spreadsheet, ATTENDANCE_SHEET_NAME);
+  const submissionsSheet = requireSheet_(spreadsheet, SUBMISSIONS_SHEET_NAME);
+  const dishesSheet = requireSheet_(spreadsheet, DISHES_SHEET_NAME);
 
-  const map = getHeaderMap_(sheet);
-  const values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
-  const rows = [];
+  const columns = getAttendanceColumns_(attendanceSheet);
+  const people = readPeople_(attendanceSheet);
+  const searcherId = clean_(payload.searcherId);
+  const searcher = people.find(function(person) { return person.id === searcherId; });
+  if (!searcher) throw new Error('No encuentro a la persona que está rellenando el formulario. Recarga la página y prueba de nuevo.');
 
-  values.forEach(function(row, index) {
-    const searcherId = clean_(row[map.searcher_id]);
-    if (!searcherId) return; // ignora filas del formulario antiguo
+  if (payload.familia && normalizeKey_(payload.familia) !== normalizeKey_(searcher.familia)) {
+    throw new Error('La rama familiar no coincide. Recarga la página y prueba de nuevo.');
+  }
 
-    rows.push({
-      rowNumber: index + 2,
-      rsvp: {
-        searcherId: searcherId,
-        searcherName: clean_(row[map.searcher_name]),
-        familia: clean_(row[map.familia]),
-        attendees: parseArray_(row[map.attendees_json]),
-        dishSelection: parseArray_(row[map.dish_selection_json]),
-        otherDish: clean_(row[map.other_dish]),
-        notes: clean_(row[map.notes]),
-        kahootQuestion: clean_(row[map.kahoot_question]),
-        updatedAt: clean_(row[map.updated_at]),
-      },
-    });
+  const branch = people.filter(function(person) { return normalizeKey_(person.familia) === normalizeKey_(searcher.familia); });
+  if (!branch.length) throw new Error('No encuentro vuestra rama familiar.');
+
+  const incoming = Array.isArray(payload.attendees) ? payload.attendees : [];
+  const incomingById = {};
+  incoming.forEach(function(item) {
+    const id = clean_(item && item.id);
+    if (!id) return;
+    incomingById[id] = Boolean(item.attending);
   });
 
-  return rows;
-}
+  // Proyección previa: permite validar el plato antes de tocar ninguna celda.
+  const projectedPeople = people.map(function(person) {
+    if (normalizeKey_(person.familia) !== normalizeKey_(searcher.familia)) return person;
+    if (incomingById[person.id] === undefined) return person;
+    return Object.assign({}, person, { confirmed: incomingById[person.id] });
+  });
 
-function parseArray_(value) {
-  if (Array.isArray(value)) return value;
-  const text = clean_(value);
-  if (!text) return [];
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (ignore) {
-    return [];
+  const projectedBranch = projectedPeople.filter(function(person) {
+    return normalizeKey_(person.familia) === normalizeKey_(searcher.familia);
+  });
+  const anyAttending = projectedBranch.some(function(person) { return person.confirmed; });
+
+  let dish = canonicalDishName_(payload.dish);
+  if (anyAttending && !dish) throw new Error('Si viene alguien de vuestra rama, tenéis que elegir un plato.');
+  if (dish && !isAllowedDish_(dish)) throw new Error('Ese plato no forma parte de la lista actual. Recarga la página.');
+
+  const claimsBefore = buildActiveDishClaims_(dishesSheet, people);
+  if (dish) {
+    const conflicting = (claimsBefore[dish] || []).filter(function(carrier) {
+      return clean_(carrier.searcherId) !== searcher.id;
+    });
+    if (conflicting.length) {
+      throw new Error('Ese plato acaba de quedar ocupado por ' + conflicting[0].name + '. Elige otro.');
+    }
+  }
+
+  // ASISTENCIA: solo cambia la columna de estado; el resto de la tabla maestra no se toca.
+  branch.forEach(function(person) {
+    if (incomingById[person.id] === undefined) return;
+    attendanceSheet.getRange(person.rowNumber, columns.attendance).setValue(incomingById[person.id] ? 'CONFIRMADO' : '');
+  });
+
+  const dateText = formatDate_(new Date());
+  submissionsSheet.appendRow([
+    dateText,
+    searcher.name,
+    searcher.familia,
+    clean_(payload.notes),
+  ]);
+
+  // PLATOS es un log: solo añadimos una fila si realmente cambia la reclamación del rellenador.
+  if (anyAttending && dish) {
+    const currentDish = currentDishForSearcher_(claimsBefore, searcher.id);
+    if (normalizeKey_(currentDish) !== normalizeKey_(dish)) {
+      dishesSheet.appendRow([dish, formatCarrier_(searcher), dateText]);
+    }
   }
 }
 
-function cleanStringArray_(value, maxItems) {
-  if (!Array.isArray(value)) return [];
-  const seen = {};
-  return value.slice(0, maxItems || 40).map(clean_).filter(function(item) {
-    if (!item || seen[item]) return false;
-    seen[item] = true;
-    return true;
+function saveKahoot_(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('Faltan datos del Kahoot.');
+  const question = clean_(payload.question);
+  const answer = clean_(payload.answer);
+  if (!question) throw new Error('Escribe una pregunta para el Kahoot.');
+  if (!answer) throw new Error('La respuesta es obligatoria.');
+
+  const spreadsheet = getSpreadsheet_();
+  const sheet = requireSheet_(spreadsheet, KAHOOT_SHEET_NAME);
+  ensureKahootSchema_(sheet);
+  sheet.appendRow([question, answer, formatDate_(new Date())]);
+}
+
+function readPeople_(sheet) {
+  const columns = getAttendanceColumns_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const lastColumn = Math.max(sheet.getLastColumn(), columns.attendance);
+  const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+  const people = [];
+  let currentBranch = '';
+
+  values.forEach(function(row, index) {
+    const rowNumber = index + 2;
+    const rawName = clean_(row[columns.name - 1]);
+    if (!rawName) return;
+    if (/^RAMA\s*:/i.test(rawName)) {
+      currentBranch = rawName.replace(/^RAMA\s*:/i, '').trim();
+      return;
+    }
+
+    const family = clean_(row[columns.family - 1]) || currentBranch;
+    if (!family) return;
+    people.push({
+      id: String(rowNumber),
+      rowNumber: rowNumber,
+      name: rawName,
+      familia: family,
+      age: clean_(row[columns.age - 1]),
+      confirmed: normalizeKey_(row[columns.attendance - 1]) === 'confirmado',
+    });
   });
+
+  return people;
+}
+
+function getAttendanceColumns_(sheet) {
+  const lastColumn = Math.max(sheet.getLastColumn(), 4);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(clean_);
+
+  function findExact_(label) {
+    const wanted = normalizeKey_(label);
+    for (let i = 0; i < headers.length; i += 1) {
+      if (normalizeKey_(headers[i]) === wanted) return i + 1;
+    }
+    return 0;
+  }
+
+  function findContains_(label) {
+    const wanted = normalizeKey_(label);
+    for (let i = 0; i < headers.length; i += 1) {
+      if (normalizeKey_(headers[i]).indexOf(wanted) !== -1) return i + 1;
+    }
+    return 0;
+  }
+
+  const columns = {
+    name: findExact_('NOMBRE'),
+    family: findExact_('FAMILIA'),
+    age: findExact_('GRUPO DE EDAD'),
+    attendance: findContains_('ASISTENCIA'),
+  };
+
+  if (!columns.name || !columns.family || !columns.age || !columns.attendance) {
+    throw new Error('La pestaña ASISTENCIA no tiene las columnas esperadas: NOMBRE, FAMILIA, GRUPO DE EDAD y ASISTENCIA.');
+  }
+  return columns;
+}
+
+function buildActiveDishClaims_(sheet, people) {
+  const result = {};
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return result;
+
+  const peopleByKey = {};
+  const familyHasConfirmed = {};
+  people.forEach(function(person) {
+    peopleByKey[personKey_(person.name, person.familia)] = person;
+    const familyKey = normalizeKey_(person.familia);
+    if (person.confirmed) familyHasConfirmed[familyKey] = true;
+  });
+
+  // El registro es append-only. Para una misma persona, su última fila es la reclamación vigente.
+  const latestByCarrier = {};
+  const rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+  rows.forEach(function(row) {
+    const dish = canonicalDishName_(row[0]);
+    const carrierRaw = clean_(row[1]);
+    if (!dish || !carrierRaw) return;
+    const parsed = parseCarrier_(carrierRaw);
+    if (!parsed.name) return;
+    const key = personKey_(parsed.name, parsed.familia);
+    latestByCarrier[key] = {
+      dish: dish,
+      name: parsed.name,
+      familia: parsed.familia,
+      date: clean_(row[2]),
+    };
+  });
+
+  Object.keys(latestByCarrier).forEach(function(key) {
+    const claim = latestByCarrier[key];
+    const matchedPerson = peopleByKey[key];
+    const family = matchedPerson ? matchedPerson.familia : claim.familia;
+    const familyKey = normalizeKey_(family);
+
+    // Si reconocemos la rama y ya no viene nadie de ella, el plato deja de bloquear la lista.
+    if (familyKey && familyHasConfirmed[familyKey] !== true) return;
+
+    if (!result[claim.dish]) result[claim.dish] = [];
+    result[claim.dish].push({
+      name: matchedPerson ? matchedPerson.name : claim.name,
+      familia: family,
+      searcherId: matchedPerson ? matchedPerson.id : '',
+      date: claim.date,
+    });
+  });
+
+  return result;
+}
+
+function currentDishForSearcher_(claims, searcherId) {
+  const id = clean_(searcherId);
+  const dishNames = Object.keys(claims || {});
+  for (let i = 0; i < dishNames.length; i += 1) {
+    const dishName = dishNames[i];
+    const carriers = claims[dishName] || [];
+    if (carriers.some(function(carrier) { return clean_(carrier.searcherId) === id; })) return dishName;
+  }
+  return '';
+}
+
+function ensureKahootSchema_(sheet) {
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastColumn = Math.max(sheet.getLastColumn(), 4);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(clean_);
+  const first = normalizeKey_(headers[0]);
+  const second = normalizeKey_(headers[1]);
+  const third = normalizeKey_(headers[2]);
+  const fourth = normalizeKey_(headers[3]);
+
+  // Migra de NOMBRE | PREGUNTA | RESPUESTA | FECHA a PREGUNTA | RESPUESTA | FECHA.
+  if (first === 'nombre' && second === 'pregunta' && third === 'respuesta' && fourth === 'fecha') {
+    const data = lastRow > 1 ? sheet.getRange(2, 2, lastRow - 1, 3).getValues() : [];
+    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 4).clearContent();
+    sheet.getRange(1, 1, 1, 3).setValues([['PREGUNTA', 'RESPUESTA', 'FECHA']]);
+    sheet.getRange(1, 4).clearContent();
+    if (data.length) sheet.getRange(2, 1, data.length, 3).setValues(data);
+    return;
+  }
+
+  sheet.getRange(1, 1, 1, 3).setValues([['PREGUNTA', 'RESPUESTA', 'FECHA']]);
+}
+
+function canonicalDishName_(value) {
+  const cleanName = clean_(value);
+  if (!cleanName) return '';
+  const key = normalizeKey_(cleanName);
+  const aliases = {
+    'salmorejo': 'Salmorejo cordobés',
+    'tabla de embutidos y quesos': 'Tabla de embutidos, quesos y picos',
+    'tarta de queso al horno': 'Tarta de queso al horno (bonus)',
+  };
+  if (aliases[key]) return aliases[key];
+  for (let i = 0; i < DISH_NAMES.length; i += 1) {
+    if (normalizeKey_(DISH_NAMES[i]) === key) return DISH_NAMES[i];
+  }
+  return cleanName;
+}
+
+function isAllowedDish_(dishName) {
+  const key = normalizeKey_(dishName);
+  return DISH_NAMES.some(function(item) { return normalizeKey_(item) === key; });
+}
+
+function parseCarrier_(raw) {
+  const value = clean_(raw);
+  const match = value.match(/^(.+?)\s*\((?:rama\s+)?(.+?)\)\s*$/i);
+  if (match) return { name: clean_(match[1]), familia: clean_(match[2]) };
+  const parts = value.split(' · ');
+  if (parts.length >= 2) return { name: clean_(parts[0]), familia: clean_(parts.slice(1).join(' · ')) };
+  return { name: value, familia: '' };
+}
+
+function formatCarrier_(person) {
+  return clean_(person.name) + ' (' + clean_(person.familia) + ')';
+}
+
+function personKey_(name, family) {
+  return normalizeKey_(family) + '|' + normalizeKey_(name);
+}
+
+function getSpreadsheet_() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
+function requireSheet_(spreadsheet, name) {
+  const sheet = spreadsheet.getSheetByName(name);
+  if (!sheet) throw new Error('No existe la pestaña ' + name + ' en la hoja organización.');
+  return sheet;
 }
 
 function isClosed_() {
   return Date.now() >= RSVP_CLOSE_AT;
 }
 
-function limit_(value, maxLength) {
-  return clean_(value).slice(0, maxLength);
+function formatDate_(date) {
+  return Utilities.formatDate(date, TIME_ZONE, 'dd/MM/yyyy');
 }
 
 function clean_(value) {
-  return String(value === null || value === undefined ? '' : value).trim();
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function normalizeKey_(value) {
+  return clean_(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ñ/g, 'n')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function errorMessage_(error) {
-  return String(error && error.message ? error.message : error || 'Error desconocido.');
+  if (!error) return 'Error desconocido.';
+  if (error.message) return String(error.message);
+  return String(error);
 }
 
 function json_(payload) {
-  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
 }

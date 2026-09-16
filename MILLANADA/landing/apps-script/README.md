@@ -1,48 +1,30 @@
-# Apps Script — La Millanada 2026
+# Apps Script v9 — La Millanada 2026
 
-`Code.gs` conecta la landing con el Google Sheet `Reparto Menu Millanada` (ID ya configurado dentro del script).
+Este backend usa como fuente única el Google Sheet `organización`:
 
-## Instalación / actualización
+`14bvnt5EWz-njcRNp_CxzoMqzOZfuhik2pf9YJ5ujbms`
 
-1. Abre el proyecto de Google Apps Script que tenga acceso al Sheet.
-2. Sustituye el contenido por `Code.gs`.
-3. Ejecuta `setup()` una vez y acepta permisos.
-4. Despliega como **Aplicación web**:
-   - Ejecutar como: tú / propietario del Sheet.
-   - Acceso: cualquiera con el enlace.
-5. Copia la URL que termina en `/exec`.
-6. Configura esa URL como `MILLANADA_SCRIPT_URL` en el hosting de la landing.
+Pestañas reales:
 
-Cuando cambie `Code.gs`, crea una nueva versión del despliegue (o actualiza la existente) para que la URL `/exec` ejecute el código nuevo.
+- `ASISTENCIA`: maestro de personas. Solo se modifica la columna de asistencia (`CONFIRMADO` o vacío).
+- `ENVIOS`: una fila nueva por cada confirmación enviada.
+- `PLATOS`: una fila nueva cuando una persona reclama/cambia su plato.
+- `KAHOOT`: una fila nueva por pregunta anónima.
 
-## Operaciones
+## Actualización
 
-- `GET ?action=state`: devuelve solo información pública necesaria para contador y reparto.
-- `GET ?action=rsvp&searcherId=...`: devuelve la respuesta guardada de ese invitado para poder editarla.
-- `POST { action: "submit", payload: ... }`: guarda o actualiza por `searcherId`.
+1. Sustituye el contenido del Apps Script activo por `Code.gs`.
+2. Guarda.
+3. Ejecuta `setup()` una vez.
+4. Acepta los permisos solicitados.
+5. Actualiza la implementación web a **Nueva versión** y conserva acceso **Cualquier persona**.
 
-Las escrituras se protegen con `LockService` para evitar choques si varias ramas guardan al mismo tiempo.
+`setup()` también migra `KAHOOT` de `NOMBRE | PREGUNTA | RESPUESTA | FECHA` a `PREGUNTA | RESPUESTA | FECHA` sin perder las tres columnas útiles.
 
-## Pestañas y columnas
+## API
 
-### `Confirmaciones Web`
+- `GET ?action=state`: personas, estados de asistencia y ocupación actual de platos.
+- `POST { action: "rsvp", payload: ... }`: actualiza asistencia y añade registros a `ENVIOS` / `PLATOS`.
+- `POST { action: "kahoot", payload: ... }`: añade pregunta + respuesta de forma anónima a `KAHOOT`.
 
-El script conserva columnas antiguas y añade las nuevas que falten:
-
-`submitted_at`, `searcher_id`, `searcher_name`, `familia`, `attendees_json`, `dish_selection_json`, `other_dish`, `notes`, `kahoot_question`, `updated_at`.
-
-`kahoot_question` queda como columna independiente para recopilar todas las propuestas fácilmente.
-
-### `Reparto Menu`
-
-Después de cada `POST`, `syncMenuAssignments_()` reconstruye el reparto desde todos los RSVP vigentes:
-
-- Columna E `FAMILIA RESPONSABLE`: familia o familias que se han apuntado ese concepto.
-- Columna F `CONFIRMADO`: `✅` cuando existe al menos un responsable.
-- Columna G `NOTAS`: nombres de las personas que lo llevan.
-
-Al reconstruirlo entero, editar un RSVP no deja asignaciones antiguas. Si alguien escribe un plato libre que no existe en el menú, se añade una fila `OTRO PROPUESTO` al final. `LockService` protege tanto el RSVP como esta sincronización para evitar choques entre envíos simultáneos.
-
-## Cierre
-
-A partir del 6 de octubre de 2026 00:00 +02:00, `POST` rechaza cambios. Los `GET` siguen funcionando para consulta.
+Las escrituras se protegen con `LockService`.

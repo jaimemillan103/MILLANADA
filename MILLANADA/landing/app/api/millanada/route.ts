@@ -5,8 +5,9 @@ const cloudflareEnv = env as unknown as Record<string, string | undefined>;
 const scriptUrl = (cloudflareEnv.MILLANADA_SCRIPT_URL || process.env.MILLANADA_SCRIPT_URL || '').trim();
 
 const demoState = {
+  people: [],
   totalAttending: 0,
-  dishCounts: {},
+  dishClaims: {},
   updatedAt: null,
   closed: false,
 };
@@ -20,20 +21,12 @@ async function readJsonSafely(response: Response) {
   }
 }
 
-function demoGet(action: string) {
-  if (action === 'rsvp') return NextResponse.json({ ok: true, demo: true, rsvp: null });
-  return NextResponse.json({ ok: true, demo: true, state: demoState });
-}
-
 export async function GET(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action') || 'state';
-  const searcherId = request.nextUrl.searchParams.get('searcherId') || '';
-
-  if (!scriptUrl) return demoGet(action);
+  if (!scriptUrl) return NextResponse.json({ ok: true, demo: true, state: demoState });
 
   const upstreamUrl = new URL(scriptUrl);
   upstreamUrl.searchParams.set('action', action);
-  if (searcherId) upstreamUrl.searchParams.set('searcherId', searcherId);
 
   try {
     const upstream = await fetch(upstreamUrl.toString(), { cache: 'no-store' });
@@ -49,7 +42,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const payload = await request.json();
+  const body = (await request.json()) as { action?: unknown; payload?: unknown };
+  const action = typeof body.action === 'string' ? body.action : 'rsvp';
+  const payload = body.payload ?? body;
 
   if (!scriptUrl) {
     return NextResponse.json({ ok: true, demo: true, state: demoState });
@@ -59,7 +54,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'submit', payload }),
+      body: JSON.stringify({ action, payload }),
       cache: 'no-store',
     });
     const data = await readJsonSafely(upstream);

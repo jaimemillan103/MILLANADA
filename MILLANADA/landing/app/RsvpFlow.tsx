@@ -5,37 +5,25 @@ import {
   RSVP_CLOSE_ISO,
   RSVP_DEADLINE,
   dishGroups,
-  dishNames,
-  guests,
-  type Attendee,
-  type Guest,
-  type GuestAge,
+  type Person,
   type PublicState,
   type RsvpPayload,
 } from './data';
-
-type ExtraGuest = {
-  id: string;
-  name: string;
-  age: GuestAge;
-};
 
 type ApiEnvelope = {
   ok?: boolean;
   error?: string;
   demo?: boolean;
   state?: PublicState;
-  rsvp?: RsvpPayload | null;
 };
 
 const emptyState: PublicState = {
+  people: [],
   totalAttending: 0,
-  dishCounts: {},
+  dishClaims: {},
   updatedAt: null,
   closed: false,
 };
-
-const DEMO_KEY = 'millanada-rsvps-v2';
 
 function normalize(value: string) {
   return value
@@ -45,94 +33,31 @@ function normalize(value: string) {
     .trim();
 }
 
-function readDemoRsvps(): RsvpPayload[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(DEMO_KEY) ?? '[]') as RsvpPayload[];
-  } catch {
-    return [];
-  }
-}
-
-function writeDemoRsvp(payload: RsvpPayload) {
-  const current = readDemoRsvps().filter((item) => item.searcherId !== payload.searcherId);
-  current.push(payload);
-  window.localStorage.setItem(DEMO_KEY, JSON.stringify(current));
-}
-
-function buildDemoState(): PublicState {
-  const all = readDemoRsvps();
-  const dishCounts: PublicState['dishCounts'] = {};
-  let totalAttending = 0;
-
-  all.forEach((rsvp) => {
-    rsvp.attendees.forEach((attendee) => {
-      if (!attendee.attending) return;
-      totalAttending += 1;
-      attendee.dishes.forEach((dishName) => {
-        dishCounts[dishName] ??= [];
-        dishCounts[dishName].push({
-          name: attendee.name,
-          familia: rsvp.familia,
-          searcherId: rsvp.searcherId,
-        });
-      });
-    });
-  });
-
-  const latest = [...all].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).at(-1);
-  return {
-    totalAttending,
-    dishCounts,
-    updatedAt: latest?.updatedAt ?? null,
-    closed: Date.now() >= new Date(RSVP_CLOSE_ISO).getTime(),
-  };
-}
-
-function makeDefaultAttendance(branch: Guest[], checked: boolean) {
-  return Object.fromEntries(branch.map((member) => [member.id, checked])) as Record<string, boolean>;
+function attendanceMapForBranch(branch: Person[]) {
+  return Object.fromEntries(branch.map((member) => [member.id, member.confirmed])) as Record<string, boolean>;
 }
 
 export default function RsvpFlow() {
-  const [query, setQuery] = useState('');
-  const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
-  const [branch, setBranch] = useState<Guest[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, boolean>>({});
-  const [extras, setExtras] = useState<ExtraGuest[]>([]);
-  const [selectedDishes, setSelectedDishes] = useState<Set<string>>(new Set());
-  const [otherDish, setOtherDish] = useState('');
-  const [notes, setNotes] = useState('');
-  const [kahootQuestion, setKahootQuestion] = useState('');
   const [publicState, setPublicState] = useState<PublicState>(emptyState);
   const [backendMode, setBackendMode] = useState<'checking' | 'live' | 'demo' | 'error'>('checking');
-  const [savedStatus, setSavedStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error'>('idle');
+  const [query, setQuery] = useState('');
+  const [selectedGuest, setSelectedGuest] = useState<Person | null>(null);
+  const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+  const [selectedDish, setSelectedDish] = useState('');
+  const [notes, setNotes] = useState('');
+  const [showOnlyFree, setShowOnlyFree] = useState(true);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [message, setMessage] = useState('');
-  const [savedPayload, setSavedPayload] = useState<RsvpPayload | null>(null);
-  const [hasSavedRsvp, setHasSavedRsvp] = useState<boolean | null>(null);
   const [closedByClock, setClosedByClock] = useState(false);
 
   const isClosed = closedByClock || Boolean(publicState.closed);
-
-  useEffect(() => {
-    const refreshDeadline = () => setClosedByClock(Date.now() >= new Date(RSVP_CLOSE_ISO).getTime());
-    refreshDeadline();
-    const timer = window.setInterval(refreshDeadline, 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const loadPublicState = useCallback(async () => {
     try {
       const response = await fetch('/api/millanada?action=state', { cache: 'no-store' });
       const data = (await response.json()) as ApiEnvelope;
-      if (!response.ok || data.ok === false) throw new Error(data.error || 'No se pudo leer el reparto.');
-
-      if (data.demo) {
-        setBackendMode('demo');
-        setPublicState(buildDemoState());
-        return;
-      }
-
-      setBackendMode('live');
+      if (!response.ok || data.ok === false) throw new Error(data.error || 'No se pudo cargar la organización.');
+      setBackendMode(data.demo ? 'demo' : 'live');
       if (data.state) setPublicState(data.state);
     } catch {
       setBackendMode('error');
@@ -140,271 +65,170 @@ export default function RsvpFlow() {
   }, []);
 
   useEffect(() => {
-    const initial = window.setTimeout(loadPublicState, 0);
-    const timer = window.setInterval(loadPublicState, 8_000);
+    const refreshDeadline = () => setClosedByClock(Date.now() >= new Date(RSVP_CLOSE_ISO).getTime());
+    refreshDeadline();
+    const deadlineTimer = window.setInterval(refreshDeadline, 60_000);
+    const first = window.setTimeout(loadPublicState, 0);
+    const stateTimer = window.setInterval(loadPublicState, 12_000);
     return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(timer);
+      window.clearInterval(deadlineTimer);
+      window.clearTimeout(first);
+      window.clearInterval(stateTimer);
     };
   }, [loadPublicState]);
 
   const matches = useMemo(() => {
-    const normalized = normalize(query);
-    if (normalized.length < 2 || selectedGuest) return [];
-    return guests
-      .filter((guest) => normalize(guest.name).includes(normalized))
-      .slice(0, 8);
-  }, [query, selectedGuest]);
+    const needle = normalize(query);
+    if (needle.length < 2 || selectedGuest) return [];
+    return publicState.people
+      .filter((person) => normalize(person.name).includes(needle))
+      .slice(0, 10);
+  }, [publicState.people, query, selectedGuest]);
 
-  const resetFormForGuest = useCallback((guest: Guest) => {
-    const nextBranch = guests.filter((item) => item.familia === guest.familia);
-    setBranch(nextBranch);
-    setAttendance(makeDefaultAttendance(nextBranch, !isClosed));
-    setExtras([]);
-    setSelectedDishes(new Set());
-    setOtherDish('');
-    setNotes('');
-    setKahootQuestion('');
-    setSavedPayload(null);
-    setHasSavedRsvp(null);
-    setSavedStatus('loading');
-    setMessage('Buscando si ya habíais respondido…');
-  }, [isClosed]);
+  const branch = useMemo(() => {
+    if (!selectedGuest) return [];
+    return publicState.people.filter((person) => person.familia === selectedGuest.familia);
+  }, [publicState.people, selectedGuest]);
 
-  const applySavedRsvp = useCallback((rsvp: RsvpPayload | null, fallbackBranch: Guest[]) => {
-    if (!rsvp) {
-      setAttendance(makeDefaultAttendance(fallbackBranch, !isClosed));
-      setHasSavedRsvp(false);
-      setSavedStatus('idle');
-      setMessage(isClosed ? 'No hay una confirmación guardada para este nombre.' : '');
-      return;
+  const selectedGuestCurrentDish = useMemo(() => {
+    if (!selectedGuest) return '';
+    for (const [dishName, carriers] of Object.entries(publicState.dishClaims)) {
+      if (carriers.some((carrier) => carrier.searcherId === selectedGuest.id)) return dishName;
     }
+    return '';
+  }, [publicState.dishClaims, selectedGuest]);
 
-    const attendanceMap = makeDefaultAttendance(fallbackBranch, false);
-    const branchIds = new Set(fallbackBranch.map((member) => member.id));
-    const nextExtras: ExtraGuest[] = [];
-
-    rsvp.attendees.forEach((attendee) => {
-      if (branchIds.has(attendee.id)) {
-        attendanceMap[attendee.id] = Boolean(attendee.attending);
-      } else if (attendee.extra) {
-        nextExtras.push({
-          id: attendee.id,
-          name: attendee.name,
-          age: (['Adulto', 'Joven adulto', 'Niño/a'].includes(attendee.age) ? attendee.age : 'Adulto') as GuestAge,
-        });
-      }
-    });
-
-    const knownDishes = new Set(dishNames);
-    setAttendance(attendanceMap);
-    setExtras(nextExtras);
-    setSelectedDishes(new Set(rsvp.dishSelection.filter((dish) => knownDishes.has(dish))));
-    setOtherDish(rsvp.otherDish || '');
-    setNotes(rsvp.notes || '');
-    setKahootQuestion(rsvp.kahootQuestion || '');
-    setSavedPayload(rsvp);
-    setHasSavedRsvp(true);
-    setSavedStatus('idle');
-    setMessage(isClosed ? 'Esta es la última respuesta guardada.' : 'Hemos recuperado vuestra respuesta anterior. Podéis cambiarla y volver a guardar.');
-  }, [isClosed]);
-
-  async function chooseGuest(guest: Guest) {
-    setSelectedGuest(guest);
+  function chooseGuest(person: Person) {
+    const nextBranch = publicState.people.filter((item) => item.familia === person.familia);
+    setSelectedGuest(person);
     setQuery('');
-    resetFormForGuest(guest);
-    const nextBranch = guests.filter((item) => item.familia === guest.familia);
+    setAttendance(attendanceMapForBranch(nextBranch));
 
-    try {
-      const response = await fetch(`/api/millanada?action=rsvp&searcherId=${encodeURIComponent(guest.id)}`, { cache: 'no-store' });
-      const data = (await response.json()) as ApiEnvelope;
-      if (!response.ok || data.ok === false) throw new Error(data.error || 'No se pudo recuperar la respuesta.');
-
-      if (data.demo) {
-        setBackendMode('demo');
-        const local = readDemoRsvps().find((item) => item.searcherId === guest.id) ?? null;
-        applySavedRsvp(local, nextBranch);
-        return;
+    let existingDish = '';
+    for (const [dishName, carriers] of Object.entries(publicState.dishClaims)) {
+      if (carriers.some((carrier) => carrier.searcherId === person.id)) {
+        existingDish = dishName;
+        break;
       }
-
-      setBackendMode('live');
-      applySavedRsvp(data.rsvp ?? null, nextBranch);
-    } catch (error) {
-      setHasSavedRsvp(false);
-      setSavedStatus('error');
-      setMessage(error instanceof Error ? error.message : 'No se pudo recuperar la respuesta anterior.');
     }
+    setSelectedDish(existingDish);
+    setNotes('');
+    setStatus('idle');
+    setMessage('');
   }
 
   function changeGuest() {
     setSelectedGuest(null);
     setQuery('');
-    setBranch([]);
     setAttendance({});
-    setExtras([]);
-    setSelectedDishes(new Set());
-    setOtherDish('');
+    setSelectedDish('');
     setNotes('');
-    setKahootQuestion('');
-    setSavedPayload(null);
-    setHasSavedRsvp(null);
-    setSavedStatus('idle');
+    setStatus('idle');
     setMessage('');
   }
 
-  function addExtra() {
-    if (isClosed || !selectedGuest) return;
-    const id = `x-${selectedGuest.id}-${Date.now()}-${extras.length}`;
-    setExtras((current) => [...current, { id, name: '', age: 'Adulto' }]);
+  function carriersOtherThanMe(dishName: string) {
+    const carriers = publicState.dishClaims[dishName] || [];
+    if (!selectedGuest) return carriers;
+    return carriers.filter((carrier) => carrier.searcherId !== selectedGuest.id);
   }
 
-  function updateExtra(id: string, patch: Partial<ExtraGuest>) {
-    setExtras((current) => current.map((extra) => (extra.id === id ? { ...extra, ...patch } : extra)));
+  function dishIsTaken(dishName: string) {
+    return carriersOtherThanMe(dishName).length > 0;
   }
 
-  function removeExtra(id: string) {
-    if (isClosed) return;
-    setExtras((current) => current.filter((extra) => extra.id !== id));
-  }
-
-  function toggleDish(name: string) {
-    if (isClosed) return;
-    setSelectedDishes((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  }
-
-  function dishTag(name: string) {
-    if (selectedDishes.has(name)) return 'vosotros lo traéis';
-    const carriers = publicState.dishCounts[name] || [];
+  function dishTag(dishName: string) {
+    if (selectedDish === dishName && selectedGuestCurrentDish === dishName) return 'tu plato actual';
+    if (selectedDish === dishName) return 'seleccionado';
+    const carriers = carriersOtherThanMe(dishName);
     if (!carriers.length) return 'libre';
     const names = carriers.slice(0, 2).map((carrier) => carrier.name).join(', ');
     return `ya lo trae ${names}${carriers.length > 2 ? ' y otros' : ''}`;
   }
 
-  function makePayload(): RsvpPayload | null {
-    if (!selectedGuest) return null;
-
-    const attendees: Attendee[] = branch.map((member) => ({
-      id: member.id,
-      name: member.name,
-      age: member.age,
-      attending: Boolean(attendance[member.id]),
-      extra: false,
-      dishes: [],
-    }));
-
-    extras
-      .filter((extra) => extra.name.trim())
-      .forEach((extra) => {
-        attendees.push({
-          id: extra.id,
-          name: extra.name.trim(),
-          age: extra.age,
-          attending: true,
-          extra: true,
-          dishes: [],
-        });
-      });
-
-    const canonicalDishes = Array.from(selectedDishes);
-    const trimmedOtherDish = otherDish.trim();
-    const dishSelection = trimmedOtherDish ? [...canonicalDishes, trimmedOtherDish] : canonicalDishes;
-    const carrier = attendees.find((attendee) => attendee.id === selectedGuest.id && attendee.attending)
-      ?? attendees.find((attendee) => attendee.attending);
-    if (carrier) carrier.dishes = dishSelection;
-
-    return {
-      searcherId: selectedGuest.id,
-      searcherName: selectedGuest.name,
-      familia: selectedGuest.familia,
-      attendees,
-      dishSelection,
-      otherDish: trimmedOtherDish,
-      notes: notes.trim(),
-      kahootQuestion: kahootQuestion.trim(),
-      updatedAt: new Date().toISOString(),
-    };
-  }
+  const anyAttending = branch.some((member) => Boolean(attendance[member.id]));
 
   async function submitRsvp() {
+    if (!selectedGuest) return;
     if (isClosed) {
-      setSavedStatus('error');
+      setStatus('error');
       setMessage('Confirmaciones cerradas — habla con Teresa.');
       return;
     }
+    if (anyAttending && !selectedDish) {
+      setStatus('error');
+      setMessage('Si viene alguien de vuestra rama, tenéis que elegir un plato antes de confirmar.');
+      return;
+    }
+    if (selectedDish && dishIsTaken(selectedDish)) {
+      setStatus('error');
+      setMessage('Ese plato acaba de quedar ocupado. Elige otro y vuelve a confirmar.');
+      await loadPublicState();
+      return;
+    }
 
-    const payload = makePayload();
-    if (!payload) return;
+    const payload: RsvpPayload = {
+      searcherId: selectedGuest.id,
+      searcherName: selectedGuest.name,
+      familia: selectedGuest.familia,
+      attendees: branch.map((member) => ({
+        id: member.id,
+        name: member.name,
+        attending: Boolean(attendance[member.id]),
+      })),
+      dish: anyAttending ? selectedDish : '',
+      notes: notes.trim(),
+      submittedAt: new Date().toISOString(),
+    };
 
-    setSavedStatus('saving');
+    setStatus('saving');
     setMessage('Guardando…');
 
     try {
       const response = await fetch('/api/millanada', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ action: 'rsvp', payload }),
       });
       const data = (await response.json()) as ApiEnvelope;
-      if (!response.ok || data.ok === false) throw new Error(data.error || 'No se ha podido guardar.');
-
-      if (data.demo) {
-        writeDemoRsvp(payload);
-        setBackendMode('demo');
-        setPublicState(buildDemoState());
-      } else {
-        setBackendMode('live');
-        if (data.state) setPublicState(data.state);
-      }
-
-      setSavedPayload(payload);
-      setHasSavedRsvp(true);
-      setSavedStatus('saved');
-      setMessage(data.demo ? 'Guardado solo en este navegador porque falta conectar Google Sheets.' : 'Guardado en Google Sheets.');
+      if (!response.ok || data.ok === false) throw new Error(data.error || 'No se pudo guardar la confirmación.');
+      if (data.state) setPublicState(data.state);
+      setBackendMode(data.demo ? 'demo' : 'live');
+      setStatus('saved');
+      setMessage('Confirmación guardada.');
     } catch (error) {
-      setSavedStatus('error');
-      setMessage(error instanceof Error ? error.message : 'No se ha podido guardar, prueba otra vez en unos segundos.');
+      setStatus('error');
+      setMessage(error instanceof Error ? error.message : 'No se pudo guardar. Prueba otra vez en unos segundos.');
     }
   }
 
-  const attendingNames = savedPayload?.attendees.filter((attendee) => attendee.attending).map((attendee) => attendee.name) ?? [];
-  const summaryDishes = savedPayload?.dishSelection ?? [];
+  const selectedAttendingNames = branch.filter((member) => attendance[member.id]).map((member) => member.name);
 
   return (
-    <section id="confirmar" className="rsvp-wrap" aria-labelledby="rsvp-heading">
-      <div className="rsvp-heading-block">
-        <div className="eyebrow">Confirmaciones · hasta el {RSVP_DEADLINE}</div>
-        <h2 id="rsvp-heading">¿Quién viene y qué traéis?</h2>
-        <p>Buscad un nombre de vuestra rama y dejadlo todo resuelto en un minuto.</p>
+    <section id="confirmar" className="confirm-section" aria-labelledby="confirm-title">
+      <div className="section-head confirm-head">
+        <span className="eyebrow">Confirmaciones · hasta el {RSVP_DEADLINE}</span>
+        <h2 id="confirm-title">Confirmaciones</h2>
+        <p>Busca tu nombre (si hay varios, elige el que vaya con los apellidos de tu familia), marca quién viene de vuestra rama y elegid qué vais a traer.</p>
       </div>
 
       {isClosed && (
-        <div className="closed-banner" role="status">
+        <div className="status-banner error-banner" role="status">
           <strong>Confirmaciones cerradas — habla con Teresa.</strong>
-          <span>Podéis consultar lo que quedó guardado, pero ya no se puede modificar desde la web.</span>
+          <span>La información sigue visible, pero ya no se puede modificar desde la web.</span>
         </div>
       )}
-
-      {backendMode === 'demo' && (
-        <div className="backend-banner warning" role="status">
-          <strong>Modo prueba:</strong> la web funciona, pero todavía no está enlazada con el Google Sheet en este entorno.
-        </div>
-      )}
-
       {backendMode === 'error' && (
-        <div className="backend-banner error" role="status">
-          No hemos podido leer el estado del reparto. Puedes seguir consultando la página y volver a intentarlo en unos segundos.
-        </div>
+        <div className="status-banner error-banner" role="status">No podemos conectar ahora mismo con la hoja de organización. Prueba de nuevo en unos segundos.</div>
+      )}
+      {backendMode === 'demo' && (
+        <div className="status-banner demo-banner" role="status">Modo de prueba: falta conectar el Apps Script de la hoja «organización».</div>
       )}
 
-      <div className="rsvp-column">
-        <section className="rsvp-card">
-          <div className="step-label"><span className="step-num">1</span><span className="step-title">Buscad vuestro nombre</span></div>
-          <div className="step-sub">Escribid quién de vosotros rellena esto — luego confirmáis por toda vuestra rama de la familia.</div>
+      <div className="confirm-column">
+        <section className="conf-card">
+          <div className="step-label"><span className="step-num">1</span><span className="step-title">Nombre de quien está rellenando el cuestionario</span></div>
+          <p className="step-sub">Escribe tu nombre. Si se repite en la familia, verás también la rama para elegir bien.</p>
 
           {!selectedGuest ? (
             <div className="search-wrap">
@@ -412,37 +236,37 @@ export default function RsvpFlow() {
                 type="text"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Empieza a escribir tu nombre…"
+                placeholder={backendMode === 'checking' ? 'Cargando nombres…' : 'Empieza a escribir tu nombre…'}
                 autoComplete="off"
+                disabled={backendMode === 'checking' || backendMode === 'error'}
                 aria-label="Buscar nombre"
               />
               {matches.length > 0 && (
                 <div className="search-results">
-                  {matches.map((guest) => (
-                    <button type="button" className="result-row" key={guest.id} onClick={() => chooseGuest(guest)}>
-                      <span>{guest.name}</span><span className="result-fam">{guest.familia}</span>
+                  {matches.map((person) => (
+                    <button type="button" className="result-row" key={person.id} onClick={() => chooseGuest(person)}>
+                      <span>{person.name}</span><span className="result-fam">{person.familia}</span>
                     </button>
                   ))}
                 </div>
               )}
-              {normalize(query).length >= 2 && matches.length === 0 && (
+              {normalize(query).length >= 2 && matches.length === 0 && backendMode === 'live' && (
                 <p className="search-empty">No aparece ese nombre. Prueba solo con el nombre de pila.</p>
               )}
             </div>
           ) : (
             <div className="me-badge">
-              <span>Rellenando como {selectedGuest.name} · {selectedGuest.familia}</span>
+              <span><strong>{selectedGuest.name}</strong> · {selectedGuest.familia}</span>
               <button type="button" onClick={changeGuest}>cambiar</button>
             </div>
           )}
         </section>
 
-        {selectedGuest && savedStatus !== 'saved' && (
+        {selectedGuest && status !== 'saved' && (
           <>
-            <section className="rsvp-card">
+            <section className="conf-card">
               <div className="step-label"><span className="step-num">2</span><span className="step-title">¿Quién de vuestro grupo viene?</span></div>
-              <div className="step-sub">Están marcados todos por defecto — desmarcad quien no pueda venir, y añadid a quien falte en la lista.</div>
-
+              <p className="step-sub">Aparecen marcados quienes ya constan como confirmados. Toca cualquier fila para cambiarlo.</p>
               <div className="member-list">
                 {branch.map((member) => (
                   <label className="member-row" key={member.id}>
@@ -456,132 +280,90 @@ export default function RsvpFlow() {
                       <span className="member-name">{member.name}</span>
                       <span className="member-age">{member.age}</span>
                     </span>
+                    {member.confirmed && <span className="status-tag confirmado">CONFIRMADO</span>}
                   </label>
                 ))}
               </div>
-
-              <div className="extra-list">
-                {extras.map((extra) => (
-                  <div className="extra-row" key={extra.id}>
-                    <input
-                      type="text"
-                      value={extra.name}
-                      readOnly={isClosed}
-                      placeholder="Nombre"
-                      onChange={(event) => updateExtra(extra.id, { name: event.target.value })}
-                    />
-                    <select value={extra.age} disabled={isClosed} onChange={(event) => updateExtra(extra.id, { age: event.target.value as GuestAge })}>
-                      <option>Adulto</option>
-                      <option>Joven adulto</option>
-                      <option>Niño/a</option>
-                    </select>
-                    {!isClosed && <button type="button" aria-label={`Quitar ${extra.name || 'acompañante'}`} onClick={() => removeExtra(extra.id)}>✕</button>}
-                  </div>
-                ))}
-              </div>
-
-              {!isClosed && <button className="add-btn" type="button" onClick={addExtra}>+ Añadir a alguien más de la familia</button>}
             </section>
 
-            <section className="rsvp-card">
+            <section className="conf-card">
               <div className="step-label"><span className="step-num">3</span><span className="step-title">¿Qué plato podéis traer?</span></div>
-              <div className="step-sub">Este es el reparto ya pensado para el menú (~30 personas). Si algo está en rojo es que alguien lo ha apuntado ya — elegid otra cosa si podéis. Podéis marcar más de un plato.</div>
+              <p className="step-sub">{anyAttending ? <>Obligatorio si viene alguien de vuestra rama <span className="req">· elegid uno</span></> : 'Como no hay nadie marcado, no hace falta elegir plato.'}</p>
 
-              <div className="dish-area">
-                {dishGroups.map((group) => (
-                  <div className="cat-block" key={group.category}>
-                    <div className={`cat-head ${group.className}`}>{group.category}</div>
-                    {group.note && <div className="cat-note">{group.note}</div>}
-                    <div className="dish-grid">
-                      {group.items.map((item) => {
-                        const selected = selectedDishes.has(item.name);
-                        const taken = !selected && (publicState.dishCounts[item.name] || []).length > 0;
-                        return (
-                          <button
-                            type="button"
-                            disabled={isClosed}
-                            className={`dish ${selected ? 'selected' : ''} ${taken ? 'taken' : ''}`}
-                            key={item.num}
-                            onClick={() => toggleDish(item.name)}
-                          >
-                            <span className="dnum">Nº {item.num}</span>
-                            <span className="dname">{item.name}</span>
-                            <span className="dqty">{item.qty}</span>
-                            <span className="dtag">{dishTag(item.name)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div className="dish-toolbar">
+                <label className="free-toggle">
+                  <input type="checkbox" checked={showOnlyFree} onChange={(event) => setShowOnlyFree(event.target.checked)} />
+                  <span className="switch-ui" aria-hidden="true" />
+                  Mostrar solo libres
+                </label>
               </div>
 
-              <div className="other-row">
-                <input
-                  type="text"
-                  value={otherDish}
-                  readOnly={isClosed}
-                  onChange={(event) => setOtherDish(event.target.value)}
-                  placeholder="Otro plato que se os ocurra…"
+              <div className="dish-area">
+                {dishGroups.map((group) => {
+                  const visibleItems = group.items.filter((item) => !showOnlyFree || !dishIsTaken(item.name) || selectedDish === item.name);
+                  if (!visibleItems.length) return null;
+                  return (
+                    <details className="dish-category" key={`${selectedGuest.id}-${group.category}`}>
+                      <summary className={`cat-head ${group.className}`}>
+                        <span>{group.category}</span><span className="chevron">⌄</span>
+                      </summary>
+                      {group.note && <p className="cat-note">{group.note}</p>}
+                      <div className="dish-grid">
+                        {visibleItems.map((item) => {
+                          const taken = dishIsTaken(item.name);
+                          const selected = selectedDish === item.name;
+                          return (
+                            <button
+                              type="button"
+                              key={item.name}
+                              className={`dish ${taken ? 'taken' : ''} ${selected ? 'selected' : ''}`}
+                              disabled={isClosed || (taken && !selected)}
+                              onClick={() => setSelectedDish(selected ? '' : item.name)}
+                            >
+                              <span className="dish-main"><span className="dnum">#{item.num}</span><span className="dname">{item.name}</span></span>
+                              <span className="dqty">{item.qty}</span>
+                              <span className="dtag">{dishTag(item.name)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+
+              <div className="notes-block">
+                <label htmlFor="rsvp-notes">¿Algo más que debamos saber? <span>opcional</span></label>
+                <textarea
+                  id="rsvp-notes"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  disabled={isClosed}
+                  placeholder="Alergias, silla para niños, hora aproximada de llegada…"
                 />
               </div>
             </section>
 
-            <section className="rsvp-card">
-              <div className="step-label"><span className="step-num">4</span><span className="step-title">Algo más</span></div>
-              <div className="step-sub">Alergias, si lleváis silla para peques, hora aproximada de llegada… lo que sea útil (opcional).</div>
-              <textarea
-                value={notes}
-                readOnly={isClosed}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Escribe aquí si hace falta…"
-              />
-            </section>
-
-            <section className="rsvp-card kahoot-card">
-              <div className="step-label"><span className="step-num">5</span><span className="step-title">¿Se te ocurre una pregunta para el Kahoot de esa noche? 🎯</span></div>
-              <div className="step-sub">Cada respuesta suma una pregunta al concurso familiar. Es opcional, pero nos viene fenomenal.</div>
-              <textarea
-                value={kahootQuestion}
-                readOnly={isClosed}
-                onChange={(event) => setKahootQuestion(event.target.value)}
-                placeholder="Escribe aquí tu pregunta (y su respuesta, si quieres)…"
-              />
-
-              {!isClosed && (
-                <button className="submit-rsvp" type="button" disabled={savedStatus === 'saving' || savedStatus === 'loading'} onClick={submitRsvp}>
-                  {savedStatus === 'saving' ? 'Guardando…' : 'Confirmar asistencia'}
-                </button>
-              )}
-              {message && <div className={`submit-msg ${savedStatus === 'error' ? 'is-error' : ''}`}>{message}</div>}
-            </section>
+            <button className="confirm-button" type="button" onClick={submitRsvp} disabled={isClosed || status === 'saving'}>
+              {status === 'saving' ? 'Guardando…' : 'Confirmar asistencia'}
+            </button>
+            {message && <p className={`submit-msg ${status === 'error' ? 'is-error' : ''}`}>{message}</p>}
           </>
         )}
 
-        {selectedGuest && savedStatus === 'saved' && savedPayload && (
-          <section className="rsvp-card confirm-card">
-            <div className="confirm-flower">🌸</div>
-            <div className="confirm-big">¡Apuntado, gracias!</div>
-            <div className="confirm-summary">
-              <p><strong>Vienen:</strong> {attendingNames.length ? attendingNames.join(', ') : 'nadie por ahora'}.</p>
-              <p><strong>Traéis:</strong> {summaryDishes.length ? summaryDishes.join(', ') : 'nada apuntado todavía'}.</p>
-              {savedPayload.kahootQuestion && <p><strong>Pregunta para el Kahoot:</strong> {savedPayload.kahootQuestion}</p>}
-            </div>
-            <div className="saved-note">{message}</div>
-            <button className="edit-again" type="button" onClick={() => setSavedStatus('idle')}>Editar mi respuesta</button>
+        {selectedGuest && status === 'saved' && (
+          <section className="conf-card confirm-result" aria-live="polite">
+            <div className="confirm-icon">✓</div>
+            <h3>¡Guardado!</h3>
+            <p>{selectedAttendingNames.length ? <>Vienen: <strong>{selectedAttendingNames.join(', ')}</strong>.</> : 'Habéis indicado que no viene nadie de esta rama.'}</p>
+            {selectedDish && <p>Plato: <strong>{selectedDish}</strong>.</p>}
+            {notes.trim() && <p>También hemos guardado vuestra nota.</p>}
+            <button type="button" className="secondary-button" onClick={() => setStatus('idle')}>Modificar esta respuesta</button>
           </section>
         )}
       </div>
 
-      <div className="live-counter" aria-live="polite">
-        {publicState.totalAttending > 0
-          ? <><b>{publicState.totalAttending}</b> personas confirmadas hasta ahora</>
-          : 'Todavía no hay confirmaciones guardadas.'}
-      </div>
-
-      {selectedGuest && hasSavedRsvp === false && isClosed && (
-        <p className="readonly-note">No había una respuesta guardada para {selectedGuest.name}; por eso no hay datos que consultar.</p>
-      )}
+      {backendMode === 'live' && <p className="live-counter"><strong>{publicState.totalAttending}</strong> personas constan ahora mismo como confirmadas.</p>}
     </section>
   );
 }
