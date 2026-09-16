@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "millanada",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "vinext/server/app-router-entry",
+  "workers_dev": true,
+  "vars": {
+    "MILLANADA_SCRIPT_URL": "https://script.google.com/macros/s/AKfycbzr1H50vWBlZexpK_dvx57qNxyzDvQSe4JDeEcy4CUpqhmFZ8v_aMYJWygIWhrNamMz/exec"
+  },
+  "assets": {
+    "not_found_handling": "none"
+  }
+}
